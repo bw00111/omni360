@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gallery - Material 3</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --md-primary: #6750A4;
+            --md-on-primary: #FFFFFF;
+            --md-primary-container: #EADDFF;
+            --md-on-primary-container: #21005D;
+            --md-surface: #FFFBFE;
+            --md-surface-variant: #E7E0EC;
+            --md-on-surface: #1C1B1F;
+            --md-on-surface-variant: #49454F;
+            --md-outline: #79747E;
+            --md-outline-variant: #CAC4D0;
+            --md-secondary-container: #E8DEF8;
+            --md-tertiary: #7D5260;
+            --md-surface-1: #F4EFFA;
+            --md-surface-2: #F0EAFA;
+            --md-surface-3: #ECE6F9;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--md-surface);
+            color: var(--md-on-surface);
+            min-height: 100vh;
+        }
+
+        /* Top App Bar */
+        .top-app-bar {
+            background-color: var(--md-surface-2);
+            padding: 16px 16px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            transition: box-shadow 0.2s ease;
+        }
+
+        .top-app-bar.scrolled {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+        }
+
+        .top-app-bar .menu-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: none;
+            background: transparent;
+            color: var(--md-on-surface);
+        }
+
+        .top-app-bar .menu-icon:hover {
+            background-color: var(--md-surface-variant);
+        }
+
+        .top-app-bar h1 {
+            font-size: 22px;
+            font-weight: 400;
+            color: var(--md-on-surface);
+            flex: 1;
+        }
+
+        /* FAB */
+        .fab {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background-color: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.1), 0 6px 10px rgba(0,0,0,0.08);
+            transition: all 0.2s ease;
+            z-index: 50;
+        }
+
+        .fab:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12), 0 8px 16px rgba(0,0,0,0.1);
+            transform: translateY(-1px);
+        }
+
+        .fab:active {
+            transform: translateY(0);
+        }
+
+        .fab .material-icons-outlined {
+            font-size: 24px;
+        }
+
+        /* Gallery Grid */
+        .gallery-container {
+            padding: 16px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .section-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--md-on-surface-variant);
+            letter-spacing: 0.1px;
+            padding: 16px 0 12px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        /* Photo Card */
+        .photo-card {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 1 / 1;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            background-color: var(--md-surface-variant);
+        }
+
+        .photo-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.3) 100%);
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .photo-card:hover::before {
+            opacity: 1;
+        }
+
+        .photo-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(103, 80, 164, 0.2);
+        }
+
+        .photo-card:active {
+            transform: scale(0.98);
+        }
+
+        .photo-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.3s ease;
+        }
+
+        .photo-card:hover img {
+            transform: scale(1.05);
+        }
+
+        .photo-card .check-circle {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid white;
+            background: transparent;
+            z-index: 3;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+        }
+
+        .photo-card:hover .check-circle {
+            opacity: 1;
+        }
+
+        .photo-card.selected .check-circle {
+            opacity: 1;
+            background-color: var(--md-primary);
+            border-color: var(--md-primary);
+        }
+
+        .photo-card.selected .check-circle .material-icons-outlined {
+            font-size: 16px;
+            color: white;
+        }
+
+        .photo-card .favorite-icon {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            z-index: 3;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(8px);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s ease;
+        }
+
+        .photo-card:hover .favorite-icon {
+            opacity: 1;
+        }
+
+        .photo-card .favorite-icon:hover {
+            background: rgba(255,255,255,0.35);
+        }
+
+        .photo-card .favorite-icon.liked {
+            opacity: 1;
+            color: #FF6B6B;
+        }
+
+        /* Loading shimmer */
+        .photo-card.loading {
+            background: linear-gradient(90deg, 
+                var(--md-surface-variant) 25%, 
+                var(--md-surface-2) 50%, 
+                var(--md-surface-variant) 75%
+            );
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Ripple */
+        .ripple {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(103, 80, 164, 0.2);
+            transform: scale(0);
+            animation: ripple-anim 0.6s ease-out;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        @keyframes ripple-anim {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* Lightbox */
+        .lightbox-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .lightbox-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .lightbox-overlay .lightbox-content {
+            max-width: 90vw;
+            max-height: 85vh;
+            border-radius: 24px;
+            overflow: hidden;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        .lightbox-overlay.active .lightbox-content {
+            transform: scale(1);
+        }
+
+        .lightbox-overlay .lightbox-content img {
+            max-width: 90vw;
+            max-height: 85vh;
+            object-fit: contain;
+            display: block;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .lightbox-close:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Snackbar */
+        .snackbar {
+            position: fixed;
+            bottom: 96px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background-color: var(--md-on-surface);
+            color: var(--md-surface);
+            padding: 14px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            z-index: 300;
+            opacity: 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            white-space: nowrap;
+        }
+
+        .snackbar.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Bottom nav hint */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background: var(--md-surface-2);
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            z-index: 40;
+            border-top: 1px solid var(--md-outline-variant);
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            padding: 8px 20px;
+            border-radius: 16px;
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+            color: var(--md-on-surface-variant);
+        }
+
+        .nav-item.active {
+            color: var(--md-on-primary-container);
+        }
+
+        .nav-item .nav-indicator {
+            width: 64px;
+            height: 32px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .nav-item.active .nav-indicator {
+            background-color: var(--md-secondary-container);
+        }
+
+        .nav-item:hover .nav-indicator {
+            background-color: var(--md-surface-variant);
+        }
+
+        .nav-item.active:hover .nav-indicator {
+            background-color: var(--md-secondary-container);
+        }
+
+        .nav-item span.label {
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        /* Padding for bottom nav */
+        .gallery-container {
+            padding-bottom: 100px;
+        }
+
+        @media (min-width: 600px) {
+            .gallery-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+        }
+
+        @media (min-width: 840px) {
+            .gallery-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top App Bar -->
+    <header class="top-app-bar" id="topAppBar">
+        <button class="menu-icon" aria-label="Menu">
+            <span class="material-icons-outlined">menu</span>
+        </button>
+        <h1>Gallery</h1>
+        <button class="menu-icon" aria-label="Search">
+            <span class="material-icons-outlined">search</span>
+        </button>
+        <button class="menu-icon" aria-label="More">
+            <span class="material-icons-outlined">more_vert</span>
+        </button>
+    </header>
+
+    <!-- Gallery Content -->
+    <main class="gallery-container">
+        <div class="section-label">Recent Photos</div>
+        <div class="gallery-grid" id="galleryGrid">
+            <!-- Photos will be injected by JS -->
+        </div>
+    </main>
+
+    <!-- FAB -->
+    <button class="fab" id="fab" aria-label="Add photo">
+        <span class="material-icons-outlined">add_a_photo</span>
+    </button>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active">
+            <div class="nav-indicator">
+                <span class="material-icons-outlined">photo_library</span>
+            </div>
+            <span class="label">Photos</span>
+        </button>
+        <button class="nav-item">
+            <div class="nav-indicator">
+                <span class="material-icons-outlined">auto_awesome</span>
+            </div>
+            <span class="label">For you</span>
+        </button>
+        <button class="nav-item">
+            <div class="nav-indicator">
+                <span class="material-icons-outlined">folder</span>
+            </div>
+            <span class="label">Albums</span>
+        </button>
+        <button class="nav-item">
+            <div class="nav-indicator">
+                <span class="material-icons-outlined">share</span>
+            </div>
+            <span class="label">Sharing</span>
+        </button>
+    </nav>
+
+    <!-- Lightbox -->
+    <div class="lightbox-overlay" id="lightbox">
+        <button class="lightbox-close" id="lightboxClose">
+            <span class="material-icons-outlined">close</span>
+        </button>
+        <div class="lightbox-content">
+            <img src="" alt="Full view" id="lightboxImg">
+        </div>
+    </div>
+
+    <!-- Snackbar -->
+    <div class="snackbar" id="snackbar"></div>
+
+    <script>
+        // Random photo URLs (1:1 aspect ratio from picsum)
+        const photoIds = [237, 433, 582, 1025];
+        const photos = photoIds.map((id, index) => ({
+            id: id,
+            src: `https://picsum.photos/id/${id}/600/600`,
+            thumb: `https://picsum.photos/id/${id}/400/400`,
+            alt: `Photo ${index + 1}`
+        }));
+
+        const galleryGrid = document.getElementById('galleryGrid');
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+        const lightboxClose = document.getElementById('lightboxClose');
+        const snackbar = document.getElementById('snackbar');
+        const topAppBar = document.getElementById('topAppBar');
+        const fab = document.getElementById('fab');
+
+        // Render gallery
+        function renderGallery() {
+            galleryGrid.innerHTML = '';
+            photos.forEach((photo, index) => {
+                const card = document.createElement('div');
+                card.className = 'photo-card loading';
+                card.dataset.index = index;
+                card.innerHTML = `
+                    <div class="check-circle" data-action="select">
+                        <span class="material-icons-outlined">check</span>
+                    </div>
+                    <img src="${photo.thumb}" alt="${photo.alt}" loading="lazy">
+                    <button class="favorite-icon" data-action="fav" aria-label="Favorite">
+                        <span class="material-icons-outlined">favorite_border</span>
+                    </button>
+                `;
+
+                const img = card.querySelector('img');
+                img.onload = () => {
+                    card.classList.remove('loading');
+                };
+                img.onerror = () => {
+                    card.classList.remove('loading');
+                };
+
+                // Ripple effect
+                card.addEventListener('click', (e) => {
+                    const action = e.target.closest('[data-action]');
+                    
+                    if (action && action.dataset.action === 'select') {
+                        card.classList.toggle('selected');
+                        const isSelected = card.classList.contains('selected');
+                        showSnackbar(isSelected ? 'Photo selected' : 'Photo deselected');
+                        return;
+                    }
+
+                    if (action && action.dataset.action === 'fav') {
+                        const icon = action.querySelector('.material-icons-outlined');
+                        action.classList.toggle('liked');
+                        if (action.classList.contains('liked')) {
+                            icon.textContent = 'favorite';
+                            showSnackbar('Added to favorites ❤️');
+                        } else {
+                            icon.textContent = 'favorite_border';
+                            showSnackbar('Removed from favorites');
+                        }
+                        return;
+                    }
+
+                    // Create ripple
+                    createRipple(e, card);
+
+                    // Open lightbox
+                    setTimeout(() => openLightbox(index), 200);
+                });
+
+                galleryGrid.appendChild(card);
+            });
+        }
+
+        function createRipple(e, element) {
+            const ripple = document.createElement('span');
+            ripple.className = 'ripple';
+            const rect = element.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height);
+            ripple.style.width = ripple.style.height = size + 'px';
+            ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+            ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+            element.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+        }
+
+        // Lightbox
+        function openLightbox(index) {
+            lightboxImg.src = photos[index].src;
+            lightbox.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeLightbox() {
+            lightbox.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        lightboxClose.addEventListener('click', closeLightbox);
+        lightbox.addEventListener('click', (e) => {
+            if (e.target === lightbox) closeLightbox();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeLightbox();
+        });
+
+        // Snackbar
+        let snackbarTimeout;
+        function showSnackbar(message) {
+            clearTimeout(snackbarTimeout);
+            snackbar.textContent = message;
+            snackbar.classList.add('show');
+            snackbarTimeout = setTimeout(() => {
+                snackbar.classList.remove('show');
+            }, 2500);
+        }
+
+        // Scroll shadow on app bar
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 4) {
+                topAppBar.classList.add('scrolled');
+            } else {
+                topAppBar.classList.remove('scrolled');
+            }
+        });
+
+        // FAB click
+        fab.addEventListener('click', () => {
+            showSnackbar('📷 Camera feature coming soon!');
+        });
+
+        // Bottom nav
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+
+        // Init
+        renderGallery();
+    </script>
+</body>
+</html>
