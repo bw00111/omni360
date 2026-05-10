@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<title>Omni360 VR</title>
+
+<!-- FONTS -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+html,body{
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#f7f8ff;
+  font-family:'Inter',sans-serif;
+}
+
+/* =========================
+   SCREEN
+========================= */
+
+.screen{
+  position:absolute;
+  width:100%;
+  height:100%;
+  display:none;
+  justify-content:center;
+  align-items:center;
+  overflow:hidden;
+  animation:fadeIn 1s ease;
+}
+
+.screen.active{
+  display:flex;
+}
+
+/* =========================
+   RAPID BLOBS
+========================= */
+
+.blob{
+  position:absolute;
+  border-radius:50%;
+  filter:blur(70px);
+  opacity:0.9;
+  animation:rapidMove 4s infinite alternate ease-in-out;
+}
+
+.blob1{
+  width:320px;
+  height:320px;
+  background:linear-gradient(135deg,#7b2ff7,#00c6ff);
+  top:-80px;
+  left:-80px;
+}
+
+.blob2{
+  width:350px;
+  height:350px;
+  background:linear-gradient(135deg,#ff3c6f,#7b2ff7);
+  bottom:-100px;
+  right:-80px;
+  animation-delay:1s;
+}
+
+.blob3{
+  width:250px;
+  height:250px;
+  background:linear-gradient(135deg,#00c6ff,#ff3c6f);
+  top:40%;
+  left:50%;
+  animation-delay:2s;
+}
+
+@keyframes rapidMove{
+
+  0%{
+    transform:translate(0px,0px) scale(1);
+  }
+
+  25%{
+    transform:translate(50px,-40px) scale(1.1);
+  }
+
+  50%{
+    transform:translate(-40px,50px) scale(0.95);
+  }
+
+  75%{
+    transform:translate(60px,30px) scale(1.05);
+  }
+
+  100%{
+    transform:translate(-50px,-40px) scale(1);
+  }
+}
+
+/* =========================
+   FADE ANIMATIONS
+========================= */
+
+.fade-in{
+  animation:fadeIn 0.8s ease;
+}
+
+.fade-out{
+  animation:fadeOut 0.8s ease forwards;
+}
+
+@keyframes fadeIn{
+  from{
+    opacity:0;
+    transform:scale(1.02);
+  }
+  to{
+    opacity:1;
+    transform:scale(1);
+  }
+}
+
+@keyframes fadeOut{
+  from{
+    opacity:1;
+  }
+  to{
+    opacity:0;
+  }
+}
+
+/* =========================
+   GLASS CARD
+========================= */
+
+.glass{
+  width:92%;
+  max-width:430px;
+
+  padding:36px;
+
+  border-radius:34px;
+
+  background:rgba(255,255,255,0.18);
+
+  backdrop-filter:blur(24px);
+
+  border:1px solid rgba(255,255,255,0.4);
+
+  box-shadow:
+  0 8px 30px rgba(95,95,140,0.12);
+
+  z-index:10;
+}
+
+/* =========================
+   SPLASH
+========================= */
+
+.logo{
+  font-size:4rem;
+  font-weight:800;
+  text-align:center;
+  letter-spacing:-2px;
+
+  color:#ffffff;
+
+  text-shadow:
+  0 0 20px rgba(255,255,255,0.4);
+
+  animation:pulse 2s infinite ease;
+}
+
+@keyframes pulse{
+
+  0%{
+    transform:scale(1);
+  }
+
+  50%{
+    transform:scale(1.03);
+  }
+
+  100%{
+    transform:scale(1);
+  }
+}
+
+/* =========================
+   TEXT
+========================= */
+
+h2{
+  font-size:2rem;
+  font-weight:700;
+  color:#222;
+  margin-bottom:24px;
+  text-align:center;
+}
+
+p{
+  font-family:'Lato',sans-serif;
+  color:#555;
+  line-height:1.6;
+}
+
+/* =========================
+   INPUTS
+========================= */
+
+input,select{
+
+  width:100%;
+
+  padding:18px;
+
+  border:none;
+
+  border-radius:20px;
+
+  margin-top:18px;
+
+  background:rgba(255,255,255,0.65);
+
+  backdrop-filter:blur(10px);
+
+  font-size:1rem;
+
+  font-family:'Inter',sans-serif;
+
+  outline:none;
+
+  color:#222;
+}
+
+.row{
+  display:flex;
+  gap:12px;
+}
+
+/* =========================
+   BUTTONS
+========================= */
+
+.buttons{
+  display:flex;
+  gap:12px;
+  margin-top:28px;
+}
+
+button{
+
+  flex:1;
+
+  border:none;
+
+  border-radius:22px;
+
+  padding:18px;
+
+  font-size:1.05rem;
+
+  font-weight:700;
+
+  font-family:'Inter',sans-serif;
+
+  color:white;
+
+  background:linear-gradient(
+    135deg,
+    #7b2ff7,
+    #00c6ff
+  );
+
+  box-shadow:
+  0 8px 20px rgba(123,47,247,0.2);
+
+  cursor:pointer;
+}
+
+.secondary{
+  background:rgba(255,255,255,0.4);
+  color:#333;
+}
+
+/* =========================
+   MANUAL
+========================= */
+
+.manual-list{
+  margin-top:10px;
+}
+
+.manual-scroll{
+
+  max-height:320px;
+
+  overflow-y:auto;
+
+  padding-right:4px;
+
+  margin-top:10px;
+}
+
+/* SCROLLBAR */
+
+.manual-scroll::-webkit-scrollbar{
+  width:6px;
+}
+
+.manual-scroll::-webkit-scrollbar-thumb{
+
+  background:rgba(123,47,247,0.4);
+
+  border-radius:20px;
+}
+
+.manual-item{
+
+  margin-bottom:18px;
+
+  padding:14px;
+
+  border-radius:18px;
+
+  background:rgba(255,255,255,0.28);
+
+  font-family:'Lato',sans-serif;
+
+  color:#444;
+}
+
+/* =========================
+   READY
+========================= */
+
+.ready-title{
+
+  text-align:center;
+
+  font-size:2.8rem;
+
+  font-weight:800;
+
+  line-height:1.2;
+
+  color:#222;
+
+  margin-bottom:30px;
+}
+
+.error-box{
+  text-align:center;
+}
+
+.error-icon{
+  font-size:5rem;
+  color:#ff3c6f;
+  margin-bottom:10px;
+}
+
+.error-text{
+  color:#ff3c6f;
+  font-size:1.1rem;
+  font-weight:700;
+}
+
+.center{
+  text-align:center;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- SPLASH -->
+
+<div class="screen active" id="splash">
+
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+  <div class="blob blob3"></div>
+
+  <div class="logo fade-in">
+    Omni360
+  </div>
+
+</div>
+
+<!-- FORM -->
+
+<div class="screen" id="formScreen">
+
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+
+  <div class="glass fade-in">
+
+    <div id="questionContainer"></div>
+
+    <div class="buttons">
+      <button class="secondary" id="backBtn">
+        Back
+      </button>
+
+      <button id="nextBtn">
+        Next
+      </button>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- MANUAL -->
+
+<!-- MANUAL -->
+
+<div class="screen" id="manualScreen">
+
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+
+  <div class="glass fade-in">
+
+    <h2>User Manual</h2>
+
+    <div class="manual-scroll">
+
+      <div class="manual-item">
+        1. Point the crosshair at objects for 2 seconds to trigger actions.
+      </div>
+
+      <div class="manual-item">
+        2. Use a stable internet connection for smooth VR loading.
+      </div>
+
+      <div class="manual-item">
+        3. Rotate slowly for better gyroscope tracking.
+      </div>
+
+      <div class="manual-item">
+        4. Use headphones for immersive audio.
+      </div>
+
+      <div class="manual-item">
+        5. Keep your phone brightness above 50%.
+      </div>
+
+      <div class="manual-item">
+        6. Best experienced in landscape mode.
+      </div>
+
+      <div class="manual-item">
+        7. Avoid walking while using VR.
+      </div>
+
+    </div>
+
+    <div class="buttons">
+      <button onclick="showReady()">
+        Continue
+      </button>
+    </div>
+
+  </div>
+
+</div>
+<!-- READY -->
+
+<div class="screen" id="readyScreen">
+
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+  <div class="blob blob3"></div>
+
+  <div class="glass fade-in center">
+
+    <div class="ready-title">
+      You're Now Ready<br>
+      To Go VR 🚀
+    </div>
+
+    <div id="sensorStatus"></div>
+
+  </div>
+
+</div>
+
+<script>
+
+/* =========================
+   CACHE EVERYTHING
+========================= */
+
+if('serviceWorker' in navigator){
+
+  const swCode = `
+
+    const CACHE_NAME = 'omni360-cache-v1';
+
+    self.addEventListener('install', e => {
+
+      e.waitUntil(
+
+        caches.open(CACHE_NAME).then(cache => {
+
+          return cache.addAll([
+            './',
+            './vr.html'
+          ]);
+
+        })
+
+      );
+
+    });
+
+    self.addEventListener('fetch', e => {
+
+      e.respondWith(
+
+        caches.match(e.request).then(response => {
+
+          return response || fetch(e.request);
+
+        })
+
+      );
+
+    });
+
+  `;
+
+  const blob = new Blob(
+    [swCode],
+    {type:'application/javascript'}
+  );
+
+  const swURL = URL.createObjectURL(blob);
+
+  navigator.serviceWorker.register(swURL);
+
+}
+
+/* =========================
+   ELEMENTS
+========================= */
+
+const splash = document.getElementById("splash");
+const formScreen = document.getElementById("formScreen");
+const manualScreen = document.getElementById("manualScreen");
+const readyScreen = document.getElementById("readyScreen");
+
+const questionContainer =
+document.getElementById("questionContainer");
+
+const nextBtn =
+document.getElementById("nextBtn");
+
+const backBtn =
+document.getElementById("backBtn");
+
+/* =========================
+   SPLASH LOGIC
+========================= */
+
+setTimeout(()=>{
+
+  splash.classList.add("fade-out");
+
+  setTimeout(()=>{
+
+    if(
+      localStorage.getItem(
+        "omni360SetupDone"
+      ) === "true"
+    ){
+
+      window.location.href = "vr.html";
+
+    }else{
+
+      splash.classList.remove("active");
+
+      formScreen.classList.add("active");
+
+      renderQuestion();
+    }
+
+  },700);
+
+},5000);
+
+/* =========================
+   QUESTIONS
+========================= */
+
+const questions = [
+
+  {
+    html:`
+
+      <div class="fade-in">
+
+        <h2>
+          What's Your Name?
+        </h2>
+
+        <input
+          type="text"
+          id="nameInput"
+          placeholder="Enter your name"
+        >
+
+      </div>
+
+    `
+  },
+
+  {
+    html:`
+
+      <div class="fade-in">
+
+        <h2>
+          Select Classroom
+        </h2>
+
+        <div class="row">
+
+          <select id="gradeSelect">
+
+            ${
+              Array.from(
+                {length:13},
+                (_,i)=>
+                `<option>${i+1}</option>`
+              ).join("")
+            }
+
+          </select>
+
+          <select id="letterSelect">
+
+            ${
+              "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+              .split("")
+              .map(
+                l=>`<option>${l}</option>`
+              ).join("")
+            }
+
+          </select>
+
+        </div>
+
+      </div>
+
+    `
+  }
+
+];
+
+let currentQuestion = 0;
+
+function renderQuestion(){
+
+  questionContainer.innerHTML =
+  questions[currentQuestion].html;
+
+  backBtn.style.display =
+  currentQuestion === 0
+  ? "none"
+  : "block";
+
+  nextBtn.innerText =
+  currentQuestion ===
+  questions.length - 1
+  ? "Continue"
+  : "Next";
+
+}
+
+/* =========================
+   NEXT
+========================= */
+
+nextBtn.onclick = ()=>{
+
+  if(currentQuestion === 0){
+
+    const name =
+    document.getElementById(
+      "nameInput"
+    ).value.trim();
+
+    if(!name){
+
+      alert("Please enter your name");
+
+      return;
+    }
+
+    localStorage.setItem(
+      "omni360Name",
+      name
+    );
+  }
+
+  if(currentQuestion === 1){
+
+    const grade =
+    document.getElementById(
+      "gradeSelect"
+    ).value;
+
+    const letter =
+    document.getElementById(
+      "letterSelect"
+    ).value;
+
+    localStorage.setItem(
+      "omni360Classroom",
+      grade + letter
+    );
+
+    formScreen.classList.remove("active");
+
+    manualScreen.classList.add("active");
+
+    return;
+  }
+
+  currentQuestion++;
+
+  renderQuestion();
+};
+
+/* =========================
+   BACK
+========================= */
+
+backBtn.onclick = ()=>{
+
+  if(currentQuestion > 0){
+
+    currentQuestion--;
+
+    renderQuestion();
+  }
+};
+
+/* =========================
+   READY SCREEN
+========================= */
+
+function showReady(){
+
+  manualScreen.classList.remove("active");
+
+  readyScreen.classList.add("active");
+
+  const sensorStatus =
+  document.getElementById(
+    "sensorStatus"
+  );
+
+  if(window.DeviceOrientationEvent){
+
+    sensorStatus.innerHTML = `
+
+      <button
+        id="goVrBtn"
+        style="
+          width:100%;
+          margin-top:10px;
+        "
+      >
+        GO VR
+      </button>
+
+    `;
+
+    document
+    .getElementById("goVrBtn")
+    .onclick = ()=>{
+
+      localStorage.setItem(
+        "omni360SetupDone",
+        "true"
+      );
+
+      const data = {
+
+        name:
+        localStorage.getItem(
+          "omni360Name"
+        ),
+
+        classroom:
+        localStorage.getItem(
+          "omni360Classroom"
+        )
+      };
+
+      localStorage.setItem(
+        "omni360UserData",
+        JSON.stringify(data)
+      );
+
+      window.location.href =
+      "vr.html";
+    };
+
+  }else{
+
+    sensorStatus.innerHTML = `
+
+      <div class="error-box">
+
+        <div class="error-icon">
+          ✕
+        </div>
+
+        <div class="error-text">
+          Your phone doesn't have
+          required sensors.
+        </div>
+
+      </div>
+
+    `;
+  }
+}
+
+</script>
+
+</body>
+</html>
