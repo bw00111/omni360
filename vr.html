@@ -500,7 +500,9 @@ function startShakeScreen(){
 
         shakeDetected = true;
 
-        enterVR();
+        enterVR(
+          
+        );
       }
 
     }
@@ -532,6 +534,9 @@ function enterVR(){
     ).style.display = "block";
 
     startGyroscope();
+    enterFullscreen();
+    keepScreenAwake();
+
 
   },1200);
 }
@@ -684,6 +689,56 @@ async function lockLandscape(){
 }
 
 lockLandscape();
+
+<script>
+
+/* =========================
+   FULLSCREEN
+========================= */
+
+async function enterFullscreen(){
+
+  const el = document.documentElement;
+
+  try{
+
+    if(el.requestFullscreen){
+
+      await el.requestFullscreen();
+
+    }else if(el.webkitRequestFullscreen){
+
+      await el.webkitRequestFullscreen();
+
+    }else if(el.msRequestFullscreen){
+
+      await el.msRequestFullscreen();
+    }
+
+  }catch(e){
+    console.log(e);
+  }
+}
+
+/* MOBILE WAKE LOCK */
+
+async function keepScreenAwake(){
+
+  try{
+
+    if("wakeLock" in navigator){
+
+      await navigator.wakeLock.request(
+        "screen"
+      );
+    }
+
+  }catch(e){
+    console.log(e);
+  }
+}
+
+</script>
 
 </script>
 
