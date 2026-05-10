@@ -31,15 +31,12 @@
 
         #vr-wrap{position:fixed;inset:0;z-index:100;display:none}
         #glc{width:100%;height:100%;display:block}
-
-        #dbg{position:fixed;top:3px;left:3px;z-index:99999;font:10px monospace;color:rgba(255,255,255,.3);pointer-events:none;display:none;white-space:pre}
     </style>
 </head>
 <body>
 <div id="rotate-screen"><div class="phone-box"></div><p>Rotate your phone to landscape</p><div class="sub">Then tap anywhere to start</div></div>
 <div id="loading-screen"><div class="goggles"><div class="lens"></div><div class="lens"></div></div><div class="ld-label">LOADING VR</div><div class="bar-bg"><div class="bar-fg" id="bar-fg"></div></div><div class="ld-pct" id="ld-pct">0%</div></div>
 <div id="vr-wrap"><canvas id="glc"></canvas></div>
-<div id="dbg"></div>
 
 <script>
 "use strict";
@@ -49,10 +46,10 @@
    ═══════════════════════════════════════════ */
 const PANO_URL = 'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
 const CACHE_KEY = 'vr-pano-v3';
-const GAZE_DUR = 2.0;          // seconds to trigger
-const CAM_SMOOTH = 0.055;       // lower = smoother
-const TILT_SMOOTH = 0.05;
-const FOV = Math.PI * 0.48;     // ~86°
+const GAZE_DUR = 2.0;
+const CAM_SMOOTH = 0.08;
+const TILT_SMOOTH = 0.06;
+const FOV = Math.PI * 0.48;
 const IPD = 0.062;
 
 const APP_ICONS = [
@@ -71,14 +68,20 @@ let gl, canvas;
 let panoTexture = null;
 let loadDone = false, loadStarted = false;
 
-// Camera angles (radians)
+// Smoothed camera angles (what we actually render)
 let pitch = 0, yaw = 0, roll = 0;
+// Target angles (from gyro/touch)
 let tPitch = 0, tYaw = 0, tRoll = 0;
 
-// Gyro calibration
+/* ---- Gyro state ---- */
 let gyroReady = false;
-let cal = { a: 0, b: 0, g: 0 };
-let raw = { a: 0, b: 0, g: 0 };
+let gyroCalibrated = false;
+
+// Calibration quaternion (device orientation at start)
+let calQ = { w: 1, x: 0, y: 0, z: 0 };
+
+// Current device quaternion
+let devQ = { w: 1, x: 0, y: 0, z: 0 };
 
 // Touch fallback
 let dragging = false, dragSX = 0, dragSY = 0, dragYaw0 = 0, dragPitch0 = 0;
@@ -97,17 +100,96 @@ let progPano;
 
 // Textures
 let texCard = null;
-let texApps = [];           // icon textures for the 6 apps
-let texAppBGs = [];         // rendered app card textures
+let texApps = [];
+let texAppBGs = [];
 let texCrosshair = null;
 let texGazeRing = null;
 let texClockWin = null;
 let texCloseBtn = null;
 let texReady = false;
 
-// App icon images
 let appIconImages = [];
 let appIconsLoaded = 0;
+
+/* ═══════════════════════════════════════════
+   QUATERNION MATH
+   ═══════════════════════════════════════════ */
+function qMul(a, b) {
+    return {
+        w: a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z,
+        x: a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
+        y: a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
+        z: a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w
+    };
+}
+
+function qConj(q) {
+    return { w: q.w, x: -q.x, y: -q.y, z: -q.z };
+}
+
+function qNorm(q) {
+    const l = Math.sqrt(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z) || 1;
+    return { w: q.w/l, x: q.x/l, y: q.y/l, z: q.z/l };
+}
+
+// Convert ZXY Euler (device orientation) to quaternion
+// alpha = z rotation (compass), beta = x rotation (tilt forward/back), gamma = y rotation (tilt left/right)
+function eulerZXYtoQ(alphaRad, betaRad, gammaRad) {
+    const ca = Math.cos(alphaRad/2), sa = Math.sin(alphaRad/2);
+    const cb = Math.cos(betaRad/2),  sb = Math.sin(betaRad/2);
+    const cg = Math.cos(gammaRad/2), sg = Math.sin(gammaRad/2);
+
+    // Qz * Qx * Qy  (ZXY order)
+    const qz = { w: ca, x: 0,  y: 0,  z: sa };
+    const qx = { w: cb, x: sb, y: 0,  z: 0  };
+    const qy = { w: cg, x: 0,  y: sg, z: 0  };
+
+    return qNorm(qMul(qMul(qz, qx), qy));
+}
+
+// Extract yaw/pitch/roll from relative quaternion for landscape-held phone
+// Phone held landscape: screen facing user, long axis horizontal
+// We want:
+//   turning head left  → scene moves right (yaw increases)
+//   turning head right → scene moves left  (yaw decreases)
+//   tilting up         → scene moves down  (pitch increases)
+//   tilting down       → scene moves up    (pitch decreases)
+function qToVRAngles(q) {
+    // Convert quaternion to rotation matrix, then extract angles
+    // adapted for landscape phone orientation
+    const { w, x, y, z } = q;
+
+    // Standard rotation matrix from quaternion
+    const m00 = 1 - 2*(y*y + z*z);
+    const m01 = 2*(x*y - w*z);
+    const m02 = 2*(x*z + w*y);
+    const m10 = 2*(x*y + w*z);
+    const m11 = 1 - 2*(x*x + z*z);
+    const m12 = 2*(y*z - w*x);
+    const m20 = 2*(x*z - w*y);
+    const m21 = 2*(y*z + w*x);
+    const m22 = 1 - 2*(x*x + y*y);
+
+    // For landscape phone (rotated 90° CCW from portrait):
+    // phone's right axis  = world X (when gamma=0, beta=0)
+    // phone's up axis     = world -Z
+    // phone's screen axis = world Y
+
+    // Extract pitch (up/down tilt) - invert for opposite direction
+    // Extract yaw (left/right turn) - invert for opposite direction
+    // Extract roll (lean left/right) - subtle
+
+    // Yaw: rotation around vertical axis → invert
+    const vrYaw = -Math.atan2(m02, m22);
+
+    // Pitch: forward/back tilt → invert
+    const vrPitch = -Math.asin(Math.max(-1, Math.min(1, -m12)));
+
+    // Roll: lean left/right → invert, subtle
+    const vrRoll = -Math.atan2(m10, m11) * 0.3;
+
+    return { yaw: vrYaw, pitch: vrPitch, roll: vrRoll };
+}
 
 /* ═══════════════════════════════════════════
    ORIENTATION / LOCK
@@ -130,7 +212,10 @@ function checkOrient() {
 
 window.addEventListener('resize', () => {
     checkOrient();
-    if (canvas) { canvas.width = innerWidth * devicePixelRatio; canvas.height = innerHeight * devicePixelRatio; }
+    if (canvas) {
+        canvas.width = innerWidth * devicePixelRatio;
+        canvas.height = innerHeight * devicePixelRatio;
+    }
 });
 window.addEventListener('orientationchange', () => setTimeout(checkOrient, 350));
 
@@ -145,7 +230,6 @@ function beginLoad() {
     const bf = document.getElementById('bar-fg');
     const pct = document.getElementById('ld-pct');
 
-    // Also start loading app icons
     loadAppIcons();
 
     if ('caches' in window) {
@@ -184,29 +268,49 @@ function fromBlob(blob, bf, pct, ls) {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { bf.style.width = '100%'; pct.textContent = '100%'; setTimeout(() => imgDone(img, ls), 450); };
+    img.onload = () => {
+        bf.style.width = '100%';
+        pct.textContent = '100%';
+        setTimeout(() => imgDone(img, ls), 450);
+    };
     img.onerror = () => directLoad(bf, pct, ls);
     img.src = url;
 }
 
 function directLoad(bf, pct, ls) {
-    const img = new Image(); img.crossOrigin = 'anonymous';
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
     let p = 0;
-    const iv = setInterval(() => { p = Math.min(p + 2, 90); bf.style.width = p + '%'; pct.textContent = Math.round(p) + '%'; }, 70);
-    img.onload = () => { clearInterval(iv); bf.style.width = '100%'; pct.textContent = '100%'; setTimeout(() => imgDone(img, ls), 450); };
+    const iv = setInterval(() => {
+        p = Math.min(p + 2, 90);
+        bf.style.width = p + '%';
+        pct.textContent = Math.round(p) + '%';
+    }, 70);
+    img.onload = () => {
+        clearInterval(iv);
+        bf.style.width = '100%';
+        pct.textContent = '100%';
+        setTimeout(() => imgDone(img, ls), 450);
+    };
     img.onerror = () => {
         clearInterval(iv);
-        const c = document.createElement('canvas'); c.width = 2048; c.height = 1024;
+        const c = document.createElement('canvas');
+        c.width = 2048; c.height = 1024;
         const cx = c.getContext('2d');
         const grd = cx.createLinearGradient(0, 0, 2048, 1024);
-        grd.addColorStop(0, '#0a0a3a'); grd.addColorStop(0.5, '#0c1e4a'); grd.addColorStop(1, '#0a0a3a');
-        cx.fillStyle = grd; cx.fillRect(0, 0, 2048, 1024);
-        // add some stars
+        grd.addColorStop(0, '#0a0a3a');
+        grd.addColorStop(0.5, '#0c1e4a');
+        grd.addColorStop(1, '#0a0a3a');
+        cx.fillStyle = grd;
+        cx.fillRect(0, 0, 2048, 1024);
         for (let i = 0; i < 300; i++) {
-            cx.fillStyle = `rgba(255,255,255,${Math.random() * 0.5 + 0.1})`;
-            cx.beginPath(); cx.arc(Math.random() * 2048, Math.random() * 1024, Math.random() * 1.5 + 0.3, 0, Math.PI * 2); cx.fill();
+            cx.fillStyle = `rgba(255,255,255,${Math.random()*0.5+0.1})`;
+            cx.beginPath();
+            cx.arc(Math.random()*2048, Math.random()*1024, Math.random()*1.5+0.3, 0, Math.PI*2);
+            cx.fill();
         }
-        bf.style.width = '100%'; pct.textContent = '100%';
+        bf.style.width = '100%';
+        pct.textContent = '100%';
         setTimeout(() => imgDone(c, ls), 450);
     };
     img.src = PANO_URL;
@@ -226,8 +330,12 @@ function loadAppIcons() {
     APP_ICONS.forEach((app, i) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.onload = () => { appIconImages[i] = img; appIconsLoaded++; if (texReady) buildAppCardTextures(); };
-        img.onerror = () => { appIconImages[i] = null; appIconsLoaded++; };
+        img.onload = () => {
+            appIconImages[i] = img;
+            appIconsLoaded++;
+            if (texReady) buildAppCardTextures();
+        };
+        img.onerror = () => { appIconsLoaded++; };
         img.src = app.url;
     });
 }
@@ -250,11 +358,10 @@ function initVR(img) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-    // Panorama texture
     panoTexture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, panoTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    tp(gl.TEXTURE_2D);
+    setTexParams(gl.TEXTURE_2D);
 
     buildShaders();
     buildSphere(52, 52, 50);
@@ -263,11 +370,11 @@ function initVR(img) {
     initGyro();
     initTouch();
 
-    // Fullscreen + gyro permission on first tap
     canvas.addEventListener('click', firstTap, { once: false });
 
     prevTime = performance.now();
     requestAnimationFrame(mainLoop);
+
     try { document.documentElement.requestFullscreen().catch(() => {}); } catch(e) {}
 }
 
@@ -330,18 +437,22 @@ function buildSphere(latB, lonB, R) {
             v.push(R * Math.cos(ph) * st, R * ct, R * Math.sin(ph) * st, 1 - j / lonB, i / latB);
         }
     }
-    for (let i = 0; i < latB; i++) for (let j = 0; j < lonB; j++) {
-        const a = i * (lonB + 1) + j, b = a + lonB + 1;
-        idx.push(a, b, a + 1, b, b + 1, a + 1);
+    for (let i = 0; i < latB; i++) {
+        for (let j = 0; j < lonB; j++) {
+            const a = i * (lonB + 1) + j, b = a + lonB + 1;
+            idx.push(a, b, a + 1, b, b + 1, a + 1);
+        }
     }
-    sphereVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
+    sphereVBO = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
-    sphereIBO = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
+    sphereIBO = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
     sphereCount = idx.length;
 }
 
-function tp(t) {
+function setTexParams(t) {
     gl.texParameteri(t, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(t, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(t, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -352,22 +463,27 @@ function tp(t) {
    MATRIX MATH
    ═══════════════════════════════════════════ */
 function I() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
+
 function persp(fov, asp, n, f) {
     const t = 1 / Math.tan(fov / 2), nf = 1 / (n - f);
     return new Float32Array([t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)*nf,-1, 0,0,2*f*n*nf,0]);
 }
+
 function mul(a, b) {
     const o = new Float32Array(16);
     for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-        let s = 0; for (let k = 0; k < 4; k++) s += a[k*4+j] * b[i*4+k]; o[i*4+j] = s;
+        let s = 0;
+        for (let k = 0; k < 4; k++) s += a[k*4+j] * b[i*4+k];
+        o[i*4+j] = s;
     }
     return o;
 }
-function rX(m, a) { const c = Math.cos(a), s = Math.sin(a), r = I(); r[5]=c;r[6]=s;r[9]=-s;r[10]=c; return mul(m,r); }
-function rY(m, a) { const c = Math.cos(a), s = Math.sin(a), r = I(); r[0]=c;r[2]=-s;r[8]=s;r[10]=c; return mul(m,r); }
-function rZ(m, a) { const c = Math.cos(a), s = Math.sin(a), r = I(); r[0]=c;r[1]=s;r[4]=-s;r[5]=c; return mul(m,r); }
-function tr(m, x, y, z) { const t = I(); t[12]=x;t[13]=y;t[14]=z; return mul(m,t); }
-function sc(m, x, y, z) { const s = I(); s[0]=x;s[5]=y;s[10]=z; return mul(m,s); }
+
+function rX(m, a) { const c=Math.cos(a),s=Math.sin(a),r=I(); r[5]=c;r[6]=s;r[9]=-s;r[10]=c; return mul(m,r); }
+function rY(m, a) { const c=Math.cos(a),s=Math.sin(a),r=I(); r[0]=c;r[2]=-s;r[8]=s;r[10]=c; return mul(m,r); }
+function rZ(m, a) { const c=Math.cos(a),s=Math.sin(a),r=I(); r[0]=c;r[1]=s;r[4]=-s;r[5]=c; return mul(m,r); }
+function tr(m, x, y, z) { const t=I(); t[12]=x;t[13]=y;t[14]=z; return mul(m,t); }
+function sc(m, x, y, z) { const s=I(); s[0]=x;s[5]=y;s[10]=z; return mul(m,s); }
 
 function viewMatrix() {
     let m = I();
@@ -378,28 +494,41 @@ function viewMatrix() {
 }
 
 /* ═══════════════════════════════════════════
-   GYROSCOPE — inverted mapping + full 180° range
+   GYROSCOPE — quaternion-based, calibrated at start
+   Fully inverted: device moves left → view goes right, etc.
    ═══════════════════════════════════════════ */
+function handleOrientationEvent(e) {
+    if (e.alpha === null || e.beta === null || e.gamma === null) return;
+
+    const D = Math.PI / 180;
+    const alpha = e.alpha * D;   // Z rotation (0-360°, compass)
+    const beta  = e.beta  * D;   // X rotation (-180 to 180°, forward/back tilt)
+    const gamma = e.gamma * D;   // Y rotation (-90 to 90°, left/right tilt)
+
+    // Build current device quaternion from ZXY Euler angles
+    devQ = eulerZXYtoQ(alpha, beta, gamma);
+
+    if (!gyroCalibrated) {
+        // Capture current orientation as "zero" reference
+        calQ = qConj(devQ); // inverse of current = calibration
+        gyroCalibrated = true;
+        gyroReady = true;
+    }
+}
+
 function initGyro() {
-    const handler = e => {
-        if (e.alpha === null) return;
-        raw.a = e.alpha; raw.b = e.beta; raw.g = e.gamma;
-        if (!gyroReady) { cal.a = e.alpha; cal.b = e.beta; cal.g = e.gamma; gyroReady = true; }
-    };
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
-        window.addEventListener('deviceorientation', handler, true);
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission !== 'function') {
+        window.addEventListener('deviceorientation', handleOrientationEvent, true);
     }
 }
 
 function reqGyroPermission() {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission().then(s => {
             if (s === 'granted') {
-                window.addEventListener('deviceorientation', e => {
-                    if (e.alpha === null) return;
-                    raw.a = e.alpha; raw.b = e.beta; raw.g = e.gamma;
-                    if (!gyroReady) { cal.a = e.alpha; cal.b = e.beta; cal.g = e.gamma; gyroReady = true; }
-                }, true);
+                window.addEventListener('deviceorientation', handleOrientationEvent, true);
             }
         }).catch(() => {});
     }
@@ -408,36 +537,21 @@ function reqGyroPermission() {
 function updateGyro() {
     if (!gyroReady) return;
 
-    let da = raw.a - cal.a;
-    let db = raw.b - cal.b;
-    let dg = raw.g - cal.g;
+    // Relative quaternion: difference from calibration pose
+    // relQ = calQ * devQ  (calQ is inverse of initial devQ)
+    const relQ = qNorm(qMul(calQ, devQ));
 
-    // Wrap alpha
-    if (da > 180) da -= 360;
-    if (da < -180) da += 360;
+    // Extract VR camera angles from relative quaternion
+    // All axes inverted so device motion is opposite to view motion
+    const angles = qToVRAngles(relQ);
 
-    const D = Math.PI / 180;
+    tYaw   = angles.yaw;
+    tPitch = angles.pitch;
+    tRoll  = angles.roll;
 
-    /*  INVERTED MAPPING:
-        Head moves LEFT  → view goes RIGHT  (yaw positive)
-        Head moves RIGHT → view goes LEFT   (yaw negative)
-        Head tilts UP    → view goes DOWN   (pitch positive)
-        Head tilts DOWN  → view goes UP     (pitch negative)
-        
-        In landscape mode:
-        - alpha → horizontal rotation → inverted yaw
-        - gamma → vertical tilt → inverted pitch
-        - beta  → head lean → inverted roll
-    */
-
-    // Invert all axes for opposite movement
-    tYaw = da * D;        // alpha delta → yaw (positive = right)
-    tPitch = dg * D;      // gamma delta → pitch
-    tRoll = -db * D * 0.25;  // subtle tilt, inverted
-
-    // Full 180° range for pitch (no clamping to 90°)
-    tPitch = Math.max(-Math.PI * 0.95, Math.min(Math.PI * 0.95, tPitch));
-    tRoll = Math.max(-0.5, Math.min(0.5, tRoll));
+    // Clamp pitch to avoid gimbal/crazy zones
+    tPitch = Math.max(-Math.PI * 0.88, Math.min(Math.PI * 0.88, tPitch));
+    tRoll  = Math.max(-0.45, Math.min(0.45, tRoll));
 }
 
 /* ═══════════════════════════════════════════
@@ -445,27 +559,45 @@ function updateGyro() {
    ═══════════════════════════════════════════ */
 function initTouch() {
     canvas.addEventListener('touchstart', e => {
-        if (e.touches.length === 1) { dragging = true; dragSX = e.touches[0].clientX; dragSY = e.touches[0].clientY; dragYaw0 = tYaw; dragPitch0 = tPitch; }
+        if (e.touches.length === 1) {
+            dragging = true;
+            dragSX = e.touches[0].clientX;
+            dragSY = e.touches[0].clientY;
+            dragYaw0 = tYaw;
+            dragPitch0 = tPitch;
+        }
         e.preventDefault();
     }, { passive: false });
+
     canvas.addEventListener('touchmove', e => {
         if (dragging && !gyroReady && e.touches.length === 1) {
-            tYaw = dragYaw0 + (e.touches[0].clientX - dragSX) * 0.004;
-            tPitch = dragPitch0 + (e.touches[0].clientY - dragSY) * 0.004;
-            tPitch = Math.max(-Math.PI * 0.95, Math.min(Math.PI * 0.95, tPitch));
+            // Invert touch drag too: drag right → view goes left
+            tYaw   = dragYaw0   - (e.touches[0].clientX - dragSX) * 0.004;
+            tPitch = dragPitch0 - (e.touches[0].clientY - dragSY) * 0.004;
+            tPitch = Math.max(-Math.PI*0.88, Math.min(Math.PI*0.88, tPitch));
         }
         e.preventDefault();
     }, { passive: false });
-    canvas.addEventListener('touchend', () => dragging = false);
-    canvas.addEventListener('mousedown', e => { dragging = true; dragSX = e.clientX; dragSY = e.clientY; dragYaw0 = tYaw; dragPitch0 = tPitch; });
+
+    canvas.addEventListener('touchend', () => { dragging = false; });
+
+    canvas.addEventListener('mousedown', e => {
+        dragging = true;
+        dragSX = e.clientX;
+        dragSY = e.clientY;
+        dragYaw0 = tYaw;
+        dragPitch0 = tPitch;
+    });
+
     window.addEventListener('mousemove', e => {
         if (dragging && !gyroReady) {
-            tYaw = dragYaw0 + (e.clientX - dragSX) * 0.004;
-            tPitch = dragPitch0 + (e.clientY - dragSY) * 0.004;
-            tPitch = Math.max(-Math.PI * 0.95, Math.min(Math.PI * 0.95, tPitch));
+            tYaw   = dragYaw0   - (e.clientX - dragSX) * 0.004;
+            tPitch = dragPitch0 - (e.clientY - dragSY) * 0.004;
+            tPitch = Math.max(-Math.PI*0.88, Math.min(Math.PI*0.88, tPitch));
         }
     });
-    window.addEventListener('mouseup', () => dragging = false);
+
+    window.addEventListener('mouseup', () => { dragging = false; });
 }
 
 /* ═══════════════════════════════════════════
@@ -475,49 +607,45 @@ function mkTex(src) {
     const t = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, t);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-    tp(gl.TEXTURE_2D);
+    setTexParams(gl.TEXTURE_2D);
     return t;
 }
 
 function rRect(ctx, x, y, w, h, r) {
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.moveTo(x+r, y);
+    ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+    ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+    ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+    ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
     ctx.closePath();
 }
 
 /* ═══════════════════════════════════════════
-   DYNAMIC TEXTURES — Card, Apps, Crosshair, Clock
+   DYNAMIC TEXTURES
    ═══════════════════════════════════════════ */
 function updateCardTexture() {
     const d = new Date();
-    const ts = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const ds = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const ts = d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    const ds = d.toLocaleDateString([], { weekday:'long', month:'long', day:'numeric', year:'numeric' });
 
     const c = document.createElement('canvas'); c.width = 512; c.height = 200;
     const x = c.getContext('2d');
 
-    // Glassmorphism background
     x.fillStyle = 'rgba(255,255,255,0.06)';
     rRect(x, 0, 0, 512, 200, 24); x.fill();
     x.strokeStyle = 'rgba(255,255,255,0.14)';
     x.lineWidth = 1.5;
     rRect(x, 0, 0, 512, 200, 24); x.stroke();
 
-    // Inner glow
     const g = x.createRadialGradient(256, 100, 10, 256, 100, 256);
     g.addColorStop(0, 'rgba(80,160,255,0.05)');
     g.addColorStop(1, 'rgba(0,0,0,0)');
     x.fillStyle = g; x.fillRect(0, 0, 512, 200);
 
-    // Time
     x.fillStyle = '#fff'; x.textAlign = 'center';
     x.font = "bold 56px 'Segoe UI',sans-serif";
     x.fillText(ts, 256, 88);
-    // Date
     x.fillStyle = 'rgba(255,255,255,0.65)';
     x.font = "18px 'Segoe UI',sans-serif";
     x.fillText(ds, 256, 140);
@@ -534,14 +662,12 @@ function buildAppCardTextures() {
         const c = document.createElement('canvas'); c.width = 160; c.height = 160;
         const x = c.getContext('2d');
 
-        // Glass card bg
         x.fillStyle = 'rgba(255,255,255,0.07)';
         rRect(x, 4, 4, 152, 152, 22); x.fill();
         x.strokeStyle = 'rgba(255,255,255,0.16)';
         x.lineWidth = 1.2;
         rRect(x, 4, 4, 152, 152, 22); x.stroke();
 
-        // Icon image with rounded corners
         const img = appIconImages[i];
         if (img) {
             x.save();
@@ -550,12 +676,10 @@ function buildAppCardTextures() {
             x.drawImage(img, 30, 20, 100, 100);
             x.restore();
         } else {
-            // Fallback emoji
             x.font = '50px sans-serif'; x.textAlign = 'center';
             x.fillText('📱', 80, 82);
         }
 
-        // Name
         x.fillStyle = 'rgba(255,255,255,0.85)';
         x.font = "12px 'Segoe UI',sans-serif";
         x.textAlign = 'center';
@@ -569,27 +693,19 @@ function buildCrosshairTexture() {
     const c = document.createElement('canvas'); c.width = 128; c.height = 128;
     const x = c.getContext('2d');
 
-    // Larger crosshair
-    // Outer ring
     x.strokeStyle = 'rgba(255,255,255,0.5)';
     x.lineWidth = 2;
-    x.beginPath(); x.arc(64, 64, 18, 0, Math.PI * 2); x.stroke();
+    x.beginPath(); x.arc(64, 64, 18, 0, Math.PI*2); x.stroke();
 
-    // Cross lines
     x.strokeStyle = 'rgba(255,255,255,0.6)';
     x.lineWidth = 1.5;
-    // top
     x.beginPath(); x.moveTo(64, 40); x.lineTo(64, 52); x.stroke();
-    // bottom
     x.beginPath(); x.moveTo(64, 76); x.lineTo(64, 88); x.stroke();
-    // left
     x.beginPath(); x.moveTo(40, 64); x.lineTo(52, 64); x.stroke();
-    // right
     x.beginPath(); x.moveTo(76, 64); x.lineTo(88, 64); x.stroke();
 
-    // Center dot
     x.fillStyle = 'rgba(255,255,255,0.85)';
-    x.beginPath(); x.arc(64, 64, 3, 0, Math.PI * 2); x.fill();
+    x.beginPath(); x.arc(64, 64, 3, 0, Math.PI*2); x.fill();
 
     if (texCrosshair) gl.deleteTexture(texCrosshair);
     texCrosshair = mkTex(c);
@@ -599,38 +715,33 @@ function buildGazeTexture(prog) {
     const c = document.createElement('canvas'); c.width = 128; c.height = 128;
     const x = c.getContext('2d');
 
-    // Outer ring background
     x.strokeStyle = 'rgba(255,255,255,0.2)';
     x.lineWidth = 4;
-    x.beginPath(); x.arc(64, 64, 30, 0, Math.PI * 2); x.stroke();
+    x.beginPath(); x.arc(64, 64, 30, 0, Math.PI*2); x.stroke();
 
-    // Progress arc
     if (prog > 0) {
         x.strokeStyle = 'rgba(0,200,255,0.9)';
         x.lineWidth = 4;
         x.lineCap = 'round';
         x.beginPath();
-        x.arc(64, 64, 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog);
+        x.arc(64, 64, 30, -Math.PI/2, -Math.PI/2 + Math.PI*2*prog);
         x.stroke();
     }
 
-    // Fill circle as it progresses (inner fill)
     if (prog > 0) {
-        x.fillStyle = `rgba(0,200,255,${prog * 0.25})`;
-        x.beginPath(); x.arc(64, 64, 26, 0, Math.PI * 2); x.fill();
+        x.fillStyle = `rgba(0,200,255,${prog*0.25})`;
+        x.beginPath(); x.arc(64, 64, 26, 0, Math.PI*2); x.fill();
     }
 
-    // Center dot
     x.fillStyle = 'rgba(255,255,255,0.9)';
-    x.beginPath(); x.arc(64, 64, 3.5, 0, Math.PI * 2); x.fill();
+    x.beginPath(); x.arc(64, 64, 3.5, 0, Math.PI*2); x.fill();
 
-    // Cross lines
-    x.strokeStyle = `rgba(255,255,255,${0.5 + prog * 0.3})`;
+    x.strokeStyle = `rgba(255,255,255,${0.5+prog*0.3})`;
     x.lineWidth = 1.5;
-    x.beginPath(); x.moveTo(64, 28); x.lineTo(64, 42); x.stroke();
-    x.beginPath(); x.moveTo(64, 86); x.lineTo(64, 100); x.stroke();
-    x.beginPath(); x.moveTo(28, 64); x.lineTo(42, 64); x.stroke();
-    x.beginPath(); x.moveTo(86, 64); x.lineTo(100, 64); x.stroke();
+    x.beginPath(); x.moveTo(64,28); x.lineTo(64,42); x.stroke();
+    x.beginPath(); x.moveTo(64,86); x.lineTo(64,100); x.stroke();
+    x.beginPath(); x.moveTo(28,64); x.lineTo(42,64); x.stroke();
+    x.beginPath(); x.moveTo(86,64); x.lineTo(100,64); x.stroke();
 
     if (texGazeRing) gl.deleteTexture(texGazeRing);
     texGazeRing = mkTex(c);
@@ -643,76 +754,68 @@ function updateClockTexture() {
     const c = document.createElement('canvas'); c.width = 512; c.height = 512;
     const x = c.getContext('2d');
 
-    // Window background
     x.fillStyle = 'rgba(6,6,28,0.94)';
     rRect(x, 0, 0, 512, 512, 26); x.fill();
     x.strokeStyle = 'rgba(255,255,255,0.12)';
     x.lineWidth = 1.5;
     rRect(x, 0, 0, 512, 512, 26); x.stroke();
 
-    // Glass inner
     const ig = x.createRadialGradient(256, 230, 10, 256, 230, 250);
-    ig.addColorStop(0, 'rgba(0,100,255,0.04)'); ig.addColorStop(1, 'rgba(0,0,0,0)');
+    ig.addColorStop(0, 'rgba(0,100,255,0.04)');
+    ig.addColorStop(1, 'rgba(0,0,0,0)');
     x.fillStyle = ig; x.fillRect(0, 0, 512, 512);
 
-    // Title
-    x.fillStyle = '#fff'; x.font = "bold 24px 'Segoe UI',sans-serif"; x.textAlign = 'center';
+    x.fillStyle = '#fff';
+    x.font = "bold 24px 'Segoe UI',sans-serif";
+    x.textAlign = 'center';
     x.fillText('Clock', 256, 42);
 
-    // Analog clock
     const cx2 = 256, cy2 = 215, r = 125;
 
-    // Face
     x.strokeStyle = 'rgba(255,255,255,0.12)'; x.lineWidth = 2;
-    x.beginPath(); x.arc(cx2, cy2, r, 0, Math.PI * 2); x.stroke();
+    x.beginPath(); x.arc(cx2, cy2, r, 0, Math.PI*2); x.stroke();
 
-    // Minute ticks
     for (let i = 0; i < 60; i++) {
-        const a = (i * 6 - 90) * Math.PI / 180;
-        const major = i % 5 === 0;
-        const inner = major ? r - 16 : r - 8;
+        const a = (i*6 - 90) * Math.PI/180;
+        const major = i%5 === 0;
+        const inner = major ? r-16 : r-8;
         x.strokeStyle = major ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.12)';
         x.lineWidth = major ? 2 : 0.8;
         x.beginPath();
-        x.moveTo(cx2 + Math.cos(a) * inner, cy2 + Math.sin(a) * inner);
-        x.lineTo(cx2 + Math.cos(a) * (r - 3), cy2 + Math.sin(a) * (r - 3));
+        x.moveTo(cx2+Math.cos(a)*inner, cy2+Math.sin(a)*inner);
+        x.lineTo(cx2+Math.cos(a)*(r-3), cy2+Math.sin(a)*(r-3));
         x.stroke();
     }
 
-    // Numbers
-    x.fillStyle = 'rgba(255,255,255,0.4)'; x.font = "15px 'Segoe UI',sans-serif";
+    x.fillStyle = 'rgba(255,255,255,0.4)';
+    x.font = "15px 'Segoe UI',sans-serif";
     for (let i = 1; i <= 12; i++) {
-        const a = (i * 30 - 90) * Math.PI / 180;
-        x.fillText(String(i), cx2 + Math.cos(a) * (r - 30) - 5, cy2 + Math.sin(a) * (r - 30) + 5);
+        const a = (i*30 - 90) * Math.PI/180;
+        x.fillText(String(i), cx2+Math.cos(a)*(r-30)-5, cy2+Math.sin(a)*(r-30)+5);
     }
 
-    // Hour hand
-    const hA = ((h % 12) + m / 60) * 30 - 90;
+    const hA = ((h%12) + m/60) * 30 - 90;
     x.strokeStyle = '#fff'; x.lineWidth = 5; x.lineCap = 'round';
     x.beginPath(); x.moveTo(cx2, cy2);
-    x.lineTo(cx2 + Math.cos(hA * Math.PI / 180) * 58, cy2 + Math.sin(hA * Math.PI / 180) * 58); x.stroke();
+    x.lineTo(cx2+Math.cos(hA*Math.PI/180)*58, cy2+Math.sin(hA*Math.PI/180)*58); x.stroke();
 
-    // Minute hand
-    const mA = (m + s / 60) * 6 - 90;
+    const mA = (m + s/60) * 6 - 90;
     x.strokeStyle = 'rgba(190,210,255,0.9)'; x.lineWidth = 3;
     x.beginPath(); x.moveTo(cx2, cy2);
-    x.lineTo(cx2 + Math.cos(mA * Math.PI / 180) * 85, cy2 + Math.sin(mA * Math.PI / 180) * 85); x.stroke();
+    x.lineTo(cx2+Math.cos(mA*Math.PI/180)*85, cy2+Math.sin(mA*Math.PI/180)*85); x.stroke();
 
-    // Second hand
-    const sA = (s + ms / 1000) * 6 - 90;
+    const sA = (s + ms/1000) * 6 - 90;
     x.strokeStyle = 'rgba(0,200,255,0.85)'; x.lineWidth = 1.5;
     x.beginPath(); x.moveTo(cx2, cy2);
-    x.lineTo(cx2 + Math.cos(sA * Math.PI / 180) * 100, cy2 + Math.sin(sA * Math.PI / 180) * 100); x.stroke();
+    x.lineTo(cx2+Math.cos(sA*Math.PI/180)*100, cy2+Math.sin(sA*Math.PI/180)*100); x.stroke();
 
-    // Center dot
-    x.fillStyle = '#fff'; x.beginPath(); x.arc(cx2, cy2, 4.5, 0, Math.PI * 2); x.fill();
-    x.fillStyle = 'rgba(0,200,255,0.8)'; x.beginPath(); x.arc(cx2, cy2, 2.5, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#fff'; x.beginPath(); x.arc(cx2, cy2, 4.5, 0, Math.PI*2); x.fill();
+    x.fillStyle = 'rgba(0,200,255,0.8)'; x.beginPath(); x.arc(cx2, cy2, 2.5, 0, Math.PI*2); x.fill();
 
-    // Digital
     x.fillStyle = '#fff'; x.font = "bold 40px 'Courier New',monospace";
     x.fillText(now.toLocaleTimeString(), 256, 400);
     x.fillStyle = 'rgba(255,255,255,0.55)'; x.font = "16px 'Segoe UI',sans-serif";
-    x.fillText(now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' }), 256, 445);
+    x.fillText(now.toLocaleDateString([], { weekday:'long', month:'short', day:'numeric' }), 256, 445);
 
     if (texClockWin) gl.deleteTexture(texClockWin);
     texClockWin = mkTex(c);
@@ -722,16 +825,14 @@ function buildCloseTexture() {
     const c = document.createElement('canvas'); c.width = 80; c.height = 80;
     const x = c.getContext('2d');
 
-    // Circle bg
     x.fillStyle = 'rgba(255,40,40,0.75)';
-    x.beginPath(); x.arc(40, 40, 26, 0, Math.PI * 2); x.fill();
+    x.beginPath(); x.arc(40, 40, 26, 0, Math.PI*2); x.fill();
     x.strokeStyle = 'rgba(255,120,120,0.3)'; x.lineWidth = 1.5;
-    x.beginPath(); x.arc(40, 40, 26, 0, Math.PI * 2); x.stroke();
+    x.beginPath(); x.arc(40, 40, 26, 0, Math.PI*2); x.stroke();
 
-    // X
     x.strokeStyle = '#fff'; x.lineWidth = 3.5; x.lineCap = 'round';
-    x.beginPath(); x.moveTo(26, 26); x.lineTo(54, 54); x.stroke();
-    x.beginPath(); x.moveTo(54, 26); x.lineTo(26, 54); x.stroke();
+    x.beginPath(); x.moveTo(26,26); x.lineTo(54,54); x.stroke();
+    x.beginPath(); x.moveTo(54,26); x.lineTo(26,54); x.stroke();
 
     if (texCloseBtn) gl.deleteTexture(texCloseBtn);
     texCloseBtn = mkTex(c);
@@ -740,7 +841,6 @@ function buildCloseTexture() {
 /* ═══════════════════════════════════════════
    GAZE / RAY INTERSECTION
    ═══════════════════════════════════════════ */
-// App positions in 3D
 function getAppPositions() {
     const startX = -3.75;
     const spacing = 1.5;
@@ -756,7 +856,7 @@ function getAppPositions() {
 function gazeDir() {
     return [
         -Math.sin(yaw) * Math.cos(pitch),
-        Math.sin(pitch),
+         Math.sin(pitch),
         -Math.cos(yaw) * Math.cos(pitch)
     ];
 }
@@ -766,7 +866,8 @@ function hitQuad(dir, pos, w, h) {
     const t = pos[2] / (-dir[2]);
     if (t < 0) return false;
     const hx = dir[0] * t, hy = dir[1] * t;
-    return hx >= pos[0] - w / 2 && hx <= pos[0] + w / 2 && hy >= pos[1] - h / 2 && hy <= pos[1] + h / 2;
+    return hx >= pos[0] - w/2 && hx <= pos[0] + w/2 &&
+           hy >= pos[1] - h/2 && hy <= pos[1] + h/2;
 }
 
 function checkGaze(dt) {
@@ -774,10 +875,8 @@ function checkGaze(dt) {
     let hit = null;
 
     if (clockOpen) {
-        // Close button
         if (hitQuad(dir, [0, 3.3, -5], 0.65, 0.65)) hit = 'close';
     } else {
-        // Check all app icons
         const apps = getAppPositions();
         for (const app of apps) {
             if (hitQuad(dir, app.pos, app.w, app.h)) {
@@ -792,7 +891,6 @@ function checkGaze(dt) {
             gazeTimer += dt;
             gazeProg = Math.min(gazeTimer / GAZE_DUR, 1.0);
             if (gazeTimer >= GAZE_DUR) {
-                // Trigger
                 if (hit === 'clock') clockOpen = true;
                 else if (hit === 'close') clockOpen = false;
                 gazeTimer = 0; gazeProg = 0; gazeHit = null;
@@ -815,10 +913,10 @@ function checkGaze(dt) {
 function drawTexQuad(proj, view, pos, w, h, tex) {
     if (!tex) return;
     gl.useProgram(progPano);
-    const aP = gl.getAttribLocation(progPano, 'aP');
-    const aT = gl.getAttribLocation(progPano, 'aT');
-    const uP = gl.getUniformLocation(progPano, 'uProj');
-    const uV = gl.getUniformLocation(progPano, 'uView');
+    const aP  = gl.getAttribLocation(progPano, 'aP');
+    const aT  = gl.getAttribLocation(progPano, 'aT');
+    const uP  = gl.getUniformLocation(progPano, 'uProj');
+    const uV  = gl.getUniformLocation(progPano, 'uView');
     const uTx = gl.getUniformLocation(progPano, 'uTex');
 
     let mdl = I();
@@ -857,11 +955,11 @@ function renderEye(proj, view) {
     gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
     gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 20, 0);
     gl.enableVertexAttribArray(aT); gl.vertexAttribPointer(aT, 2, gl.FLOAT, false, 20, 12);
-    gl.uniformMatrix4fv(gl.getUniformLocation(progPano, 'uProj'), false, proj);
-    gl.uniformMatrix4fv(gl.getUniformLocation(progPano, 'uView'), false, view);
+    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uProj'), false, proj);
+    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uView'), false, view);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, panoTexture);
-    gl.uniform1i(gl.getUniformLocation(progPano, 'uTex'), 0);
+    gl.uniform1i(gl.getUniformLocation(progPano,'uTex'), 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
     gl.drawElements(gl.TRIANGLES, sphereCount, gl.UNSIGNED_SHORT, 0);
     gl.disableVertexAttribArray(aT);
@@ -874,9 +972,7 @@ function renderEye(proj, view) {
     if (!clockOpen) {
         const apps = getAppPositions();
         apps.forEach((a, i) => {
-            if (texAppBGs[i]) {
-                drawTexQuad(proj, view, a.pos, a.w, a.h, texAppBGs[i]);
-            }
+            if (texAppBGs[i]) drawTexQuad(proj, view, a.pos, a.w, a.h, texAppBGs[i]);
         });
     }
 
@@ -886,11 +982,12 @@ function renderEye(proj, view) {
         drawTexQuad(proj, view, [0, 3.3, -5], 0.5, 0.5, texCloseBtn);
     }
 
-    // 5) Crosshair (always on top, fixed in center of each eye)
+    // 5) Crosshair — fixed in screen center, ignores world view
     gl.disable(gl.DEPTH_TEST);
-    const cP = persp(FOV, (canvas.width / 2) / canvas.height, 0.1, 100);
+    const asp2 = (canvas.width / 2) / canvas.height;
+    const cP = persp(FOV, asp2, 0.1, 100);
     const cV = I();
-    const crossTex = gazeHit ? texGazeRing : texCrosshair;
+    const crossTex  = gazeHit ? texGazeRing : texCrosshair;
     const crossSize = gazeHit ? 0.22 : 0.14;
     drawTexQuad(cP, cV, [0, 0, -2], crossSize, crossSize, crossTex);
     gl.enable(gl.DEPTH_TEST);
@@ -907,13 +1004,13 @@ function renderFrame() {
     // Left eye
     gl.viewport(0, 0, hw, canvas.height);
     const pL = persp(FOV, asp, 0.1, 100);
-    const vL = mul(v, tr(I(), IPD * 0.5, 0, 0));
+    const vL = mul(v, tr(I(), IPD*0.5, 0, 0));
     renderEye(pL, vL);
 
     // Right eye
     gl.viewport(hw, 0, hw, canvas.height);
     const pR = persp(FOV, asp, 0.1, 100);
-    const vR = mul(v, tr(I(), -IPD * 0.5, 0, 0));
+    const vR = mul(v, tr(I(), -IPD*0.5, 0, 0));
     renderEye(pR, vR);
 }
 
@@ -925,7 +1022,7 @@ function mainLoop(now) {
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
 
-    // Init textures once GL ready
+    // Init textures once GL is ready
     if (!texReady) {
         updateCardTexture();
         buildAppCardTextures();
@@ -942,22 +1039,25 @@ function mainLoop(now) {
         lastTexTime = now;
     }
 
-    // Gyro → target angles
+    // Gyro → target angles (quaternion-based, stable)
     updateGyro();
 
-    // Smooth interpolation
+    // Smooth lerp toward target
     pitch += (tPitch - pitch) * CAM_SMOOTH;
-    yaw += (tYaw - yaw) * CAM_SMOOTH;
-    roll += (tRoll - roll) * TILT_SMOOTH;
+    yaw   += (tYaw   - yaw)   * CAM_SMOOTH;
+    roll  += (tRoll  - roll)  * TILT_SMOOTH;
 
     // Gaze
     checkGaze(dt);
     if (gazeHit) buildGazeTexture(gazeProg);
 
-    // Canvas resize
-    const w = canvas.clientWidth * devicePixelRatio;
-    const h = canvas.clientHeight * devicePixelRatio;
-    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    // Canvas resize guard
+    const cw = canvas.clientWidth  * devicePixelRatio;
+    const ch = canvas.clientHeight * devicePixelRatio;
+    if (canvas.width !== cw || canvas.height !== ch) {
+        canvas.width = cw;
+        canvas.height = ch;
+    }
 
     renderFrame();
 }
