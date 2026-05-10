@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        :root {
+            --md-primary: #6750A4;
+            --md-on-primary: #FFFFFF;
+            --md-primary-container: #EADDFF;
+            --md-on-primary-container: #21005D;
+            --md-secondary: #625B71;
+            --md-secondary-container: #E8DEF8;
+            --md-on-secondary-container: #1D192B;
+            --md-tertiary: #7D5260;
+            --md-surface: #FFFBFE;
+            --md-surface-dim: #DED8E1;
+            --md-surface-1: #F7F2FA;
+            --md-surface-2: #F3EDF7;
+            --md-surface-3: #ECE6F0;
+            --md-surface-container: #F3EDF7;
+            --md-surface-container-low: #F7F2FA;
+            --md-surface-container-high: #ECE6F0;
+            --md-surface-container-highest: #E6E0E9;
+            --md-on-surface: #1C1B1F;
+            --md-on-surface-variant: #49454F;
+            --md-outline: #79747E;
+            --md-outline-variant: #CAC4D0;
+            --md-error: #B3261E;
+            --md-shadow: rgba(0,0,0,0.15);
+        }
+
+        body {
+            font-family: 'Google Sans', 'Roboto', system-ui, sans-serif;
+            background: var(--md-surface);
+            color: var(--md-on-surface);
+            min-height: 100dvh;
+            overflow-x: hidden;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        /* ── App Shell ── */
+        .app-shell { min-height: 100dvh; }
+
+        /* ── Top App Bar ── */
+        .top-bar {
+            position: sticky; top: 0; z-index: 50;
+            background: var(--md-surface-2);
+            padding: 8px 8px;
+            display: flex; align-items: center; gap: 4px;
+            transition: box-shadow 0.2s;
+        }
+        .top-bar.elevated { box-shadow: 0 2px 8px var(--md-shadow); }
+        .top-bar h1 { flex: 1; font-size: 22px; font-weight: 400; padding-left: 8px; }
+
+        .icon-btn {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: none; background: transparent; color: var(--md-on-surface);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: background 0.15s; position: relative;
+        }
+        .icon-btn:hover { background: var(--md-surface-container-highest); }
+        .icon-btn:active { transform: scale(0.92); }
+        .icon-btn .badge {
+            position: absolute; top: 8px; right: 8px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--md-primary); display: none;
+        }
+        .icon-btn .badge.show { display: block; }
+
+        /* ── Tabs ── */
+        .tabs {
+            display: flex; background: var(--md-surface-2);
+            border-bottom: 1px solid var(--md-outline-variant);
+        }
+        .tab {
+            flex: 1; padding: 14px 16px; text-align: center;
+            font-size: 14px; font-weight: 500; letter-spacing: 0.1px;
+            color: var(--md-on-surface-variant); border: none; background: none;
+            cursor: pointer; position: relative; transition: color 0.2s;
+        }
+        .tab.active { color: var(--md-primary); }
+        .tab.active::after {
+            content: ''; position: absolute; bottom: 0; left: 50%;
+            transform: translateX(-50%); width: 48px; height: 3px;
+            border-radius: 3px 3px 0 0; background: var(--md-primary);
+        }
+
+        /* ── Library View ── */
+        .library-view { padding: 16px; display: block; }
+        .library-view.hidden { display: none; }
+
+        .section-label {
+            font-size: 14px; font-weight: 500; color: var(--md-on-surface-variant);
+            letter-spacing: 0.5px; text-transform: uppercase;
+            padding: 16px 0 12px; display: flex; align-items: center; gap: 8px;
+        }
+
+        .books-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 16px;
+        }
+
+        .book-card {
+            border-radius: 16px; overflow: hidden;
+            background: var(--md-surface-container-low);
+            cursor: pointer; transition: all 0.2s;
+            border: 1px solid var(--md-outline-variant);
+            position: relative;
+        }
+        .book-card:hover { transform: translateY(-4px); box-shadow: 0 4px 16px var(--md-shadow); }
+        .book-card:active { transform: scale(0.97); }
+
+        .book-cover {
+            width: 100%; aspect-ratio: 3/4;
+            background: linear-gradient(135deg, var(--md-primary-container), var(--md-secondary-container));
+            display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+        }
+        .book-cover canvas {
+            width: 100%; height: 100%; object-fit: cover;
+        }
+        .book-cover .material-symbols-outlined {
+            font-size: 48px; color: var(--md-primary); opacity: 0.4;
+        }
+        .book-cover .progress-bar {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 4px;
+            background: rgba(0,0,0,0.1);
+        }
+        .book-cover .progress-bar .fill {
+            height: 100%; background: var(--md-primary);
+            border-radius: 0 2px 2px 0; transition: width 0.3s;
+        }
+        .book-info { padding: 12px; }
+        .book-info .title {
+            font-size: 14px; font-weight: 500; color: var(--md-on-surface);
+            display: -webkit-box; -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical; overflow: hidden;
+            line-height: 1.3; min-height: 36px;
+        }
+        .book-info .meta {
+            font-size: 11px; color: var(--md-on-surface-variant);
+            margin-top: 4px; display: flex; align-items: center; gap: 4px;
+        }
+
+        .book-card .bookmark-badge {
+            position: absolute; top: 8px; right: 8px; z-index: 2;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center;
+        }
+        .book-card .bookmark-badge.show { display: flex; }
+        .book-card .bookmark-badge .material-symbols-outlined {
+            font-size: 16px; color: var(--md-primary);
+        }
+
+        /* ── Import Card ── */
+        .import-card {
+            border-radius: 16px; overflow: hidden;
+            background: var(--md-surface-container-low);
+            cursor: pointer; transition: all 0.2s;
+            border: 2px dashed var(--md-outline-variant);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 8px; min-height: 230px;
+        }
+        .import-card:hover {
+            border-color: var(--md-primary);
+            background: var(--md-surface-1);
+        }
+        .import-card .material-symbols-outlined {
+            font-size: 36px; color: var(--md-primary);
+        }
+        .import-card span:last-child {
+            font-size: 13px; color: var(--md-on-surface-variant); font-weight: 500;
+        }
+
+        /* ── Bookmarks View ── */
+        .bookmarks-view { padding: 16px; display: none; }
+        .bookmarks-view.active { display: block; }
+
+        .bookmark-list { display: flex; flex-direction: column; gap: 8px; }
+
+        .bookmark-item {
+            display: flex; align-items: center; gap: 16px;
+            padding: 16px; border-radius: 16px;
+            background: var(--md-surface-container-low);
+            border: 1px solid var(--md-outline-variant);
+            cursor: pointer; transition: all 0.15s;
+        }
+        .bookmark-item:hover { background: var(--md-surface-container); }
+        .bookmark-item:active { transform: scale(0.98); }
+
+        .bookmark-item .bk-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            background: var(--md-primary-container);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .bookmark-item .bk-icon .material-symbols-outlined {
+            color: var(--md-on-primary-container); font-size: 24px;
+        }
+        .bookmark-item .bk-info { flex: 1; min-width: 0; }
+        .bookmark-item .bk-info .bk-title {
+            font-size: 14px; font-weight: 500; color: var(--md-on-surface);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .bookmark-item .bk-info .bk-meta {
+            font-size: 12px; color: var(--md-on-surface-variant); margin-top: 2px;
+        }
+        .bookmark-item .bk-delete {
+            width: 40px; height: 40px; border-radius: 50%;
+            border: none; background: transparent; color: var(--md-on-surface-variant);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+        }
+        .bookmark-item .bk-delete:hover { background: var(--md-surface-container-highest); }
+
+        .empty-state {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 64px 32px; gap: 12px; text-align: center;
+        }
+        .empty-state .material-symbols-outlined {
+            font-size: 64px; color: var(--md-outline-variant);
+        }
+        .empty-state p { font-size: 14px; color: var(--md-on-surface-variant); }
+
+        /* ── Reader View ── */
+        .reader-view {
+            position: fixed; inset: 0; z-index: 100;
+            background: var(--md-surface);
+            display: flex; flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.2, 0, 0, 1);
+        }
+        .reader-view.open { transform: translateX(0); }
+
+        .reader-top-bar {
+            display: flex; align-items: center; gap: 4px;
+            padding: 8px; background: var(--md-surface-2);
+            border-bottom: 1px solid var(--md-outline-variant);
+            transition: opacity 0.3s;
+        }
+        .reader-top-bar.hidden { opacity: 0; pointer-events: none; }
+
+        .reader-title {
+            flex: 1; font-size: 16px; font-weight: 500;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            padding: 0 8px;
+        }
+
+        .reader-content {
+            flex: 1; overflow-y: auto; background: #f5f5f5;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 16px 0;
+            scroll-behavior: smooth;
+        }
+
+        .pdf-page-container {
+            margin: 8px 0; position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            background: white;
+        }
+        .pdf-page-container canvas {
+            display: block; max-width: 100%;
+            height: auto !important;
+        }
+
+        .reader-bottom-bar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 12px 16px; background: var(--md-surface-2);
+            border-top: 1px solid var(--md-outline-variant);
+            transition: opacity 0.3s;
+        }
+        .reader-bottom-bar.hidden { opacity: 0; pointer-events: none; }
+
+        .page-slider {
+            flex: 1; -webkit-appearance: none; appearance: none;
+            height: 4px; border-radius: 2px;
+            background: var(--md-outline-variant);
+            outline: none; cursor: pointer;
+        }
+        .page-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 20px; height: 20px; border-radius: 50%;
+            background: var(--md-primary); cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .page-info {
+            font-size: 13px; font-weight: 500; color: var(--md-on-surface-variant);
+            min-width: 60px; text-align: center; font-variant-numeric: tabular-nums;
+        }
+
+        /* ── Loading ── */
+        .loading-overlay {
+            position: fixed; inset: 0; z-index: 200;
+            background: rgba(255,251,254,0.9); backdrop-filter: blur(8px);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 20px;
+            opacity: 0; visibility: hidden; transition: all 0.3s;
+        }
+        .loading-overlay.show { opacity: 1; visibility: visible; }
+
+        .md-spinner {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: 4px solid var(--md-surface-container-highest);
+            border-top-color: var(--md-primary);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-text { font-size: 14px; color: var(--md-on-surface-variant); }
+
+        /* ── Snackbar ── */
+        .snackbar {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+            padding: 14px 24px; border-radius: 14px;
+            background: var(--md-on-surface); color: var(--md-surface);
+            font-size: 14px; z-index: 300; opacity: 0;
+            transition: all 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            white-space: nowrap; display: flex; align-items: center; gap: 12px;
+        }
+        .snackbar.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .snackbar button {
+            background: none; border: none; color: var(--md-primary-container);
+            font-weight: 500; font-size: 14px; cursor: pointer; font-family: inherit;
+        }
+
+        /* ── Dialog ── */
+        .dialog-overlay {
+            position: fixed; inset: 0; z-index: 250;
+            background: rgba(0,0,0,0.4); display: flex;
+            align-items: center; justify-content: center;
+            opacity: 0; visibility: hidden; transition: all 0.2s;
+            padding: 24px;
+        }
+        .dialog-overlay.show { opacity: 1; visibility: visible; }
+
+        .dialog {
+            background: var(--md-surface-container-high);
+            border-radius: 28px; padding: 24px;
+            max-width: 400px; width: 100%;
+            transform: scale(0.9); transition: transform 0.25s;
+        }
+        .dialog-overlay.show .dialog { transform: scale(1); }
+        .dialog-title { font-size: 24px; font-weight: 400; margin-bottom: 16px; }
+        .dialog-body { font-size: 14px; color: var(--md-on-surface-variant); line-height: 1.5; margin-bottom: 8px; }
+        .dialog-input {
+            width: 100%; padding: 14px 16px; border-radius: 12px;
+            border: 1px solid var(--md-outline); background: var(--md-surface);
+            font-size: 14px; font-family: inherit; color: var(--md-on-surface);
+            margin: 12px 0; outline: none; transition: border-color 0.2s;
+        }
+        .dialog-input:focus { border-color: var(--md-primary); border-width: 2px; padding: 13px 15px; }
+        .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+        .dialog-btn {
+            padding: 10px 24px; border-radius: 20px; border: none;
+            font-size: 14px; font-weight: 500; cursor: pointer;
+            font-family: inherit; transition: all 0.15s;
+        }
+        .dialog-btn.text { background: transparent; color: var(--md-primary); }
+        .dialog-btn.text:hover { background: var(--md-primary-container); }
+        .dialog-btn.filled { background: var(--md-primary); color: var(--md-on-primary); }
+        .dialog-btn.filled:hover { box-shadow: 0 2px 8px var(--md-shadow); }
+
+        /* ── TOC Panel ── */
+        .toc-panel {
+            position: fixed; top: 0; right: 0; bottom: 0; width: 320px;
+            max-width: 85vw; z-index: 150;
+            background: var(--md-surface-container);
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+            display: flex; flex-direction: column;
+            box-shadow: -4px 0 16px rgba(0,0,0,0.1);
+        }
+        .toc-panel.open { transform: translateX(0); }
+        .toc-backdrop {
+            position: fixed; inset: 0; z-index: 149;
+            background: rgba(0,0,0,0.3);
+            opacity: 0; visibility: hidden; transition: all 0.3s;
+        }
+        .toc-backdrop.show { opacity: 1; visibility: visible; }
+
+        .toc-header {
+            padding: 16px; display: flex; align-items: center; gap: 8px;
+            border-bottom: 1px solid var(--md-outline-variant);
+        }
+        .toc-header h2 { flex: 1; font-size: 18px; font-weight: 500; }
+
+        .toc-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+        .toc-item {
+            padding: 14px 24px; cursor: pointer;
+            font-size: 14px; color: var(--md-on-surface-variant);
+            transition: all 0.15s; display: flex; align-items: center;
+            gap: 12px; border: none; background: none; width: 100%;
+            text-align: left; font-family: inherit;
+        }
+        .toc-item:hover { background: var(--md-surface-container-high); }
+        .toc-item.active { color: var(--md-primary); background: var(--md-primary-container); }
+        .toc-item .page-num {
+            font-size: 12px; color: var(--md-outline);
+            min-width: 28px; text-align: right;
+        }
+
+        /* ── FAB ── */
+        .fab {
+            position: fixed; bottom: 24px; right: 24px;
+            width: 56px; height: 56px; border-radius: 16px;
+            background: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+            border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 3px 8px var(--md-shadow);
+            transition: all 0.2s; z-index: 40;
+        }
+        .fab:hover { box-shadow: 0 6px 16px var(--md-shadow); transform: translateY(-2px); }
+        .fab:active { transform: scale(0.93); }
+        .fab.hidden { transform: translateY(100px); opacity: 0; pointer-events: none; }
+
+        /* Drag and drop */
+        .drag-overlay {
+            position: fixed; inset: 0; z-index: 400;
+            background: rgba(103, 80, 164, 0.1);
+            border: 3px dashed var(--md-primary);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; visibility: hidden; transition: all 0.2s;
+            backdrop-filter: blur(4px); margin: 16px; border-radius: 24px;
+        }
+        .drag-overlay.show { opacity: 1; visibility: visible; }
+        .drag-overlay .drag-content {
+            text-align: center; display: flex; flex-direction: column;
+            align-items: center; gap: 12px;
+        }
+        .drag-overlay .material-symbols-outlined { font-size: 56px; color: var(--md-primary); }
+        .drag-overlay p { font-size: 16px; color: var(--md-primary); font-weight: 500; }
+
+        /* hidden input */
+        #fileInput { display: none; }
+
+        @media (max-width: 500px) {
+            .books-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-shell">
+    <!-- Top Bar -->
+    <header class="top-bar" id="topBar">
+        <h1>Reader</h1>
+        <button class="icon-btn" id="searchBtn" title="Search">
+            <span class="material-symbols-outlined">search</span>
+        </button>
+        <button class="icon-btn" id="sortBtn" title="Sort">
+            <span class="material-symbols-outlined">sort</span>
+        </button>
+    </header>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab active" data-tab="library">Library</button>
+        <button class="tab" data-tab="bookmarks">
+            Bookmarks
+        </button>
+    </div>
+
+    <!-- Library -->
+    <div class="library-view" id="libraryView">
+        <div class="section-label">
+            <span class="material-symbols-outlined" style="font-size:18px;">auto_stories</span>
+            Your Books
+        </div>
+        <div class="books-grid" id="booksGrid"></div>
+    </div>
+
+    <!-- Bookmarks -->
+    <div class="bookmarks-view" id="bookmarksView">
+        <div id="bookmarksList"></div>
+    </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab" title="Import PDF">
+    <span class="material-symbols-outlined">upload_file</span>
+</button>
+<input type="file" id="fileInput" accept=".pdf">
+
+<!-- Reader -->
+<div class="reader-view" id="readerView">
+    <div class="reader-top-bar" id="readerTopBar">
+        <button class="icon-btn" id="readerBack"><span class="material-symbols-outlined">arrow_back</span></button>
+        <span class="reader-title" id="readerTitle">Document</span>
+        <button class="icon-btn" id="bookmarkBtn" title="Bookmark">
+            <span class="material-symbols-outlined" id="bookmarkIcon">bookmark_border</span>
+        </button>
+        <button class="icon-btn" id="tocBtn" title="Contents">
+            <span class="material-symbols-outlined">toc</span>
+        </button>
+        <button class="icon-btn" id="zoomOutBtn" title="Zoom Out">
+            <span class="material-symbols-outlined">zoom_out</span>
+        </button>
+        <button class="icon-btn" id="zoomInBtn" title="Zoom In">
+            <span class="material-symbols-outlined">zoom_in</span>
+        </button>
+    </div>
+    <div class="reader-content" id="readerContent"></div>
+    <div class="reader-bottom-bar" id="readerBottomBar">
+        <button class="icon-btn" id="prevPage"><span class="material-symbols-outlined">chevron_left</span></button>
+        <input type="range" class="page-slider" id="pageSlider" min="1" max="1" value="1">
+        <span class="page-info" id="pageInfo">1 / 1</span>
+        <button class="icon-btn" id="nextPage"><span class="material-symbols-outlined">chevron_right</span></button>
+    </div>
+</div>
+
+<!-- TOC Panel -->
+<div class="toc-backdrop" id="tocBackdrop"></div>
+<div class="toc-panel" id="tocPanel">
+    <div class="toc-header">
+        <h2>Pages</h2>
+        <button class="icon-btn" id="tocClose"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="toc-list" id="tocList"></div>
+</div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="md-spinner"></div>
+    <span class="loading-text" id="loadingText">Loading PDF…</span>
+</div>
+
+<!-- Bookmark Dialog -->
+<div class="dialog-overlay" id="bookmarkDialog">
+    <div class="dialog">
+        <div class="dialog-title">Add Bookmark</div>
+        <div class="dialog-body">Save your current reading position with a note.</div>
+        <input class="dialog-input" id="bookmarkNote" placeholder="Add a note (optional)">
+        <div class="dialog-actions">
+            <button class="dialog-btn text" id="bookmarkCancel">Cancel</button>
+            <button class="dialog-btn filled" id="bookmarkSave">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Snackbar -->
+<div class="snackbar" id="snackbar"></div>
+
+<!-- Drag Overlay -->
+<div class="drag-overlay" id="dragOverlay">
+    <div class="drag-content">
+        <span class="material-symbols-outlined">upload_file</span>
+        <p>Drop your PDF here</p>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // ── State ──
+    const state = {
+        books: [],
+        bookmarks: [],
+        currentBook: null,
+        currentPdf: null,
+        currentPage: 1,
+        totalPages: 0,
+        scale: 1.5,
+        renderedPages: new Set()
+    };
+
+    // ── Sample PDFs ──
+    const sampleBooks = [
+        {
+            id: 'grimm',
+            title: "Grimm's Fairy Tales",
+            author: 'Brothers Grimm',
+            url: 'https://www.africau.edu/images/default/sample.pdf',
+            progress: 0,
+            pages: 0,
+            lastPage: 1,
+            type: 'remote',
+            color: '#6750A4'
+        },
+        {
+            id: 'lorem',
+            title: 'Sample Story Collection',
+            author: 'PDF Examples',
+            url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+            progress: 0,
+            pages: 0,
+            lastPage: 1,
+            type: 'remote',
+            color: '#7D5260'
+        },
+        {
+            id: 'guide',
+            title: 'The Adventures Begin',
+            author: 'Open Library',
+            url: 'https://www.orimi.com/pdf-test.pdf',
+            progress: 0,
+            pages: 0,
+            lastPage: 1,
+            type: 'remote',
+            color: '#625B71'
+        }
+    ];
+
+    // ── Elements ──
+    const el = {
+        topBar: document.getElementById('topBar'),
+        booksGrid: document.getElementById('booksGrid'),
+        libraryView: document.getElementById('libraryView'),
+        bookmarksView: document.getElementById('bookmarksView'),
+        bookmarksList: document.getElementById('bookmarksList'),
+        readerView: document.getElementById('readerView'),
+        readerTopBar: document.getElementById('readerTopBar'),
+        readerBottomBar: document.getElementById('readerBottomBar'),
+        readerContent: document.getElementById('readerContent'),
+        readerTitle: document.getElementById('readerTitle'),
+        readerBack: document.getElementById('readerBack'),
+        pageSlider: document.getElementById('pageSlider'),
+        pageInfo: document.getElementById('pageInfo'),
+        prevPage: document.getElementById('prevPage'),
+        nextPage: document.getElementById('nextPage'),
+        bookmarkBtn: document.getElementById('bookmarkBtn'),
+        bookmarkIcon: document.getElementById('bookmarkIcon'),
+        tocBtn: document.getElementById('tocBtn'),
+        tocPanel: document.getElementById('tocPanel'),
+        tocBackdrop: document.getElementById('tocBackdrop'),
+        tocClose: document.getElementById('tocClose'),
+        tocList: document.getElementById('tocList'),
+        zoomInBtn: document.getElementById('zoomInBtn'),
+        zoomOutBtn: document.getElementById('zoomOutBtn'),
+        loadingOverlay: document.getElementById('loadingOverlay'),
+        loadingText: document.getElementById('loadingText'),
+        bookmarkDialog: document.getElementById('bookmarkDialog'),
+        bookmarkNote: document.getElementById('bookmarkNote'),
+        bookmarkCancel: document.getElementById('bookmarkCancel'),
+        bookmarkSave: document.getElementById('bookmarkSave'),
+        fab: document.getElementById('fab'),
+        fileInput: document.getElementById('fileInput'),
+        snackbar: document.getElementById('snackbar'),
+        dragOverlay: document.getElementById('dragOverlay')
+    };
+
+    // ── Init ──
+    function init() {
+        loadState();
+        if (state.books.length === 0) {
+            state.books = [...sampleBooks];
+            saveState();
+        } else {
+            // ensure samples still exist
+            sampleBooks.forEach(sb => {
+                if (!state.books.find(b => b.id === sb.id)) {
+                    state.books.push(sb);
+                }
+            });
+            saveState();
+        }
+        renderLibrary();
+        renderBookmarks();
+        setupEvents();
+    }
+
+    // ── Persistence ──
+    function saveState() {
+        const data = {
+            books: state.books.filter(b => b.type === 'remote').map(b => ({...b, data: undefined})),
+            bookmarks: state.bookmarks
+        };
+        try { localStorage.setItem('reader_state', JSON.stringify(data)); } catch(e) {}
+    }
+
+    function loadState() {
+        try {
+            const d = JSON.parse(localStorage.getItem('reader_state'));
+            if (d) {
+                if (d.bookmarks) state.bookmarks = d.bookmarks;
+                if (d.books) state.books = d.books;
+            }
+        } catch(e) {}
+    }
+
+    // ── Render Library ──
+    function renderLibrary() {
+        el.booksGrid.innerHTML = '';
+        state.books.forEach((book, i) => {
+            const card = document.createElement('div');
+            card.className = 'book-card';
+            card.dataset.index = i;
+
+            const hasBookmark = state.bookmarks.some(bk => bk.bookId === book.id);
+            const progress = book.pages > 0 ? Math.round((book.lastPage / book.pages) * 100) : 0;
+
+            card.innerHTML = `
+                <div class="bookmark-badge ${hasBookmark ? 'show' : ''}">
+                    <span class="material-symbols-outlined filled">bookmark</span>
+                </div>
+                <div class="book-cover" style="background: linear-gradient(135deg, ${book.color || '#6750A4'}33, ${book.color || '#6750A4'}22);">
+                    <span class="material-symbols-outlined">menu_book</span>
+                    <div class="progress-bar"><div class="fill" style="width:${progress}%"></div></div>
+                </div>
+                <div class="book-info">
+                    <div class="title">${book.title}</div>
+                    <div class="meta">
+                        <span class="material-symbols-outlined" style="font-size:14px;">person</span>
+                        ${book.author}
+                    </div>
+                    ${book.pages > 0 ? `<div class="meta" style="margin-top:2px;">${book.pages} pages · ${progress}%</div>` : ''}
+                </div>
+            `;
+            card.addEventListener('click', () => openBook(i));
+            el.booksGrid.appendChild(card);
+        });
+
+        // Import card
+        const importCard = document.createElement('div');
+        importCard.className = 'import-card';
+        importCard.innerHTML = `
+            <span class="material-symbols-outlined">add</span>
+            <span>Import PDF</span>
+        `;
+        importCard.addEventListener('click', () => el.fileInput.click());
+        el.booksGrid.appendChild(importCard);
+    }
+
+    // ── Render Bookmarks ──
+    function renderBookmarks() {
+        if (state.bookmarks.length === 0) {
+            el.bookmarksList.innerHTML = `
+                <div class="empty-state">
+                    <span class="material-symbols-outlined">bookmarks</span>
+                    <p>No bookmarks yet</p>
+                    <p>Open a book and tap the bookmark icon to save your place</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '<div class="bookmark-list">';
+        state.bookmarks.forEach((bk, i) => {
+            const book = state.books.find(b => b.id === bk.bookId);
+            const bookTitle = book ? book.title : 'Unknown Book';
+            html += `
+                <div class="bookmark-item" data-bk-index="${i}">
+                    <div class="bk-icon">
+                        <span class="material-symbols-outlined filled">bookmark</span>
+                    </div>
+                    <div class="bk-info">
+                        <div class="bk-title">${bookTitle}</div>
+                        <div class="bk-meta">Page ${bk.page} ${bk.note ? '· ' + bk.note : ''}</div>
+                        <div class="bk-meta">${new Date(bk.date).toLocaleDateString()}</div>
+                    </div>
+                    <button class="bk-delete" data-delete="${i}" title="Delete">
+                        <span class="material-symbols-outlined">delete</span>
+                    </button>
+                </div>
+            `;
+        });
+        html += '</div>';
+        el.bookmarksList.innerHTML = html;
+
+        // Events
+        el.bookmarksList.querySelectorAll('.bookmark-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.bk-delete')) return;
+                const idx = parseInt(item.dataset.bkIndex);
+                const bk = state.bookmarks[idx];
+                const bookIdx = state.books.findIndex(b => b.id === bk.bookId);
+                if (bookIdx >= 0) {
+                    openBook(bookIdx, bk.page);
+                }
+            });
+        });
+
+        el.bookmarksList.querySelectorAll('.bk-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(btn.dataset.delete);
+                state.bookmarks.splice(idx, 1);
+                saveState();
+                renderBookmarks();
+                renderLibrary();
+                showSnackbar('Bookmark removed');
+            });
+        });
+    }
+
+    // ── Open Book ──
+    async function openBook(index, goToPage) {
+        const book = state.books[index];
+        state.currentBook = book;
+        state.currentPage = goToPage || book.lastPage || 1;
+
+        el.readerTitle.textContent = book.title;
+        el.readerContent.innerHTML = '';
+        state.renderedPages.clear();
+
+        showLoading('Loading PDF…');
+
+        try {
+            let loadingTask;
+            if (book.data) {
+                loadingTask = pdfjsLib.getDocument({ data: atob(book.data) });
+            } else {
+                loadingTask = pdfjsLib.getDocument(book.url);
+            }
+
+            loadingTask.onProgress = (p) => {
+                if (p.total > 0) {
+                    const pct = Math.round((p.loaded / p.total) * 100);
+                    el.loadingText.textContent = `Loading… ${pct}%`;
+                }
+            };
+
+            const pdf = await loadingTask.promise;
+            state.currentPdf = pdf;
+            state.totalPages = pdf.numPages;
+
+            book.pages = pdf.numPages;
+            saveState();
+
+            el.pageSlider.max = pdf.numPages;
+            el.pageSlider.value = state.currentPage;
+            updatePageInfo();
+
+            // Create page containers
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const container = document.createElement('div');
+                container.className = 'pdf-page-container';
+                container.id = `page-${i}`;
+                container.dataset.page = i;
+                // Set a placeholder size
+                container.style.width = '100%';
+                container.style.maxWidth = '800px';
+                container.style.minHeight = '400px';
+                el.readerContent.appendChild(container);
+            }
+
+            hideLoading();
+            el.readerView.classList.add('open');
+            el.fab.classList.add('hidden');
+
+            // Render visible pages
+            await renderPage(state.currentPage);
+            scrollToPage(state.currentPage, false);
+            renderNearbyPages(state.currentPage);
+            buildTOC();
+            updateBookmarkIcon();
+
+        } catch (err) {
+            hideLoading();
+            console.error('Error loading PDF:', err);
+            showSnackbar('Failed to load PDF. Try another file.');
+        }
+    }
+
+    // ── Render Page ──
+    async function renderPage(pageNum) {
+        if (state.renderedPages.has(pageNum) || !state.currentPdf) return;
+        if (pageNum < 1 || pageNum > state.totalPages) return;
+
+        state.renderedPages.add(pageNum);
+        const container = document.getElementById(`page-${pageNum}`);
+        if (!container) return;
+
+        try {
+            const page = await state.currentPdf.getPage(pageNum);
+            const viewport = page.getViewport({ scale: state.scale });
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            canvas.style.width = '100%';
+
+            container.style.minHeight = 'auto';
+            container.innerHTML = '';
+            container.appendChild(canvas);
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+        } catch(e) {
+            console.error(`Error rendering page ${pageNum}:`, e);
+        }
+    }
+
+    function renderNearbyPages(pageNum) {
+        for (let i = pageNum - 2; i <= pageNum + 2; i++) {
+            if (i >= 1 && i <= state.totalPages) renderPage(i);
+        }
+    }
+
+    // ── Scroll to Page ──
+    function scrollToPage(pageNum, smooth = true) {
+        const container = document.getElementById(`page-${pageNum}`);
+        if (container) {
+            container.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant', block: 'start' });
+        }
+    }
+
+    // ── Page tracking on scroll ──
+    el.readerContent.addEventListener('scroll', () => {
+        const containers = el.readerContent.querySelectorAll('.pdf-page-container');
+        const scrollTop = el.readerContent.scrollTop;
+        const midPoint = scrollTop + el.readerContent.clientHeight / 3;
+
+        let currentPage = 1;
+        containers.forEach(c => {
+            if (c.offsetTop <= midPoint) {
+                currentPage = parseInt(c.dataset.page);
+            }
+        });
+
+        if (currentPage !== state.currentPage) {
+            state.currentPage = currentPage;
+            el.pageSlider.value = currentPage;
+            updatePageInfo();
+            updateBookmarkIcon();
+            renderNearbyPages(currentPage);
+
+            if (state.currentBook) {
+                state.currentBook.lastPage = currentPage;
+                state.currentBook.progress = Math.round((currentPage / state.totalPages) * 100);
+                saveState();
+            }
+        }
+    });
+
+    // ── Update UI ──
+    function updatePageInfo() {
+        el.pageInfo.textContent = `${state.currentPage} / ${state.totalPages}`;
+    }
+
+    function updateBookmarkIcon() {
+        if (!state.currentBook) return;
+        const exists = state.bookmarks.some(
+            bk => bk.bookId === state.currentBook.id && bk.page === state.currentPage
+        );
+        el.bookmarkIcon.textContent = exists ? 'bookmark' : 'bookmark_border';
+        if (exists) el.bookmarkIcon.classList.add('filled');
+        else el.bookmarkIcon.classList.remove('filled');
+    }
+
+    // ── Build TOC ──
+    function buildTOC() {
+        el.tocList.innerHTML = '';
+        for (let i = 1; i <= state.totalPages; i++) {
+            const btn = document.createElement('button');
+            btn.className = `toc-item ${i === state.currentPage ? 'active' : ''}`;
+            btn.innerHTML = `
+                <span class="material-symbols-outlined" style="font-size:20px;">description</span>
+                <span style="flex:1;">Page ${i}</span>
+                <span class="page-num">${i}</span>
+            `;
+            btn.addEventListener('click', () => {
+                state.currentPage = i;
+                el.pageSlider.value = i;
+                updatePageInfo();
+                renderPage(i);
+                renderNearbyPages(i);
+                scrollToPage(i);
+                closeTOC();
+                updateBookmarkIcon();
+            });
+            el.tocList.appendChild(btn);
+        }
+    }
+
+    // ── Events ──
+    function setupEvents() {
+        // Tabs
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const target = tab.dataset.tab;
+                el.libraryView.classList.toggle('hidden', target !== 'library');
+                el.bookmarksView.classList.toggle('active', target === 'bookmarks');
+            });
+        });
+
+        // Scroll shadow
+        window.addEventListener('scroll', () => {
+            el.topBar.classList.toggle('elevated', window.scrollY > 4);
+        });
+
+        // Reader back
+        el.readerBack.addEventListener('click', closeReader);
+
+        // Page slider
+        el.pageSlider.addEventListener('input', () => {
+            const p = parseInt(el.pageSlider.value);
+            state.currentPage = p;
+            updatePageInfo();
+            renderPage(p);
+            renderNearbyPages(p);
+            scrollToPage(p);
+            updateBookmarkIcon();
+        });
+
+        // Prev/Next
+        el.prevPage.addEventListener('click', () => {
+            if (state.currentPage > 1) {
+                state.currentPage--;
+                el.pageSlider.value = state.currentPage;
+                updatePageInfo();
+                renderPage(state.currentPage);
+                renderNearbyPages(state.currentPage);
+                scrollToPage(state.currentPage);
+                updateBookmarkIcon();
+            }
+        });
+        el.nextPage.addEventListener('click', () => {
+            if (state.currentPage < state.totalPages) {
+                state.currentPage++;
+                el.pageSlider.value = state.currentPage;
+                updatePageInfo();
+                renderPage(state.currentPage);
+                renderNearbyPages(state.currentPage);
+                scrollToPage(state.currentPage);
+                updateBookmarkIcon();
+            }
+        });
+
+        // Zoom
+        el.zoomInBtn.addEventListener('click', () => {
+            state.scale = Math.min(state.scale + 0.3, 4);
+            reRenderAll();
+            showSnackbar(`Zoom: ${Math.round(state.scale * 100)}%`);
+        });
+        el.zoomOutBtn.addEventListener('click', () => {
+            state.scale = Math.max(state.scale - 0.3, 0.5);
+            reRenderAll();
+            showSnackbar(`Zoom: ${Math.round(state.scale * 100)}%`);
+        });
+
+        // Bookmark
+        el.bookmarkBtn.addEventListener('click', () => {
+            if (!state.currentBook) return;
+            const exists = state.bookmarks.findIndex(
+                bk => bk.bookId === state.currentBook.id && bk.page === state.currentPage
+            );
+            if (exists >= 0) {
+                state.bookmarks.splice(exists, 1);
+                saveState();
+                updateBookmarkIcon();
+                renderBookmarks();
+                renderLibrary();
+                showSnackbar('Bookmark removed');
+            } else {
+                el.bookmarkNote.value = '';
+                el.bookmarkDialog.classList.add('show');
+            }
+        });
+
+        el.bookmarkCancel.addEventListener('click', () => {
+            el.bookmarkDialog.classList.remove('show');
+        });
+        el.bookmarkDialog.addEventListener('click', (e) => {
+            if (e.target === el.bookmarkDialog) el.bookmarkDialog.classList.remove('show');
+        });
+
+        el.bookmarkSave.addEventListener('click', () => {
+            state.bookmarks.push({
+                bookId: state.currentBook.id,
+                page: state.currentPage,
+                note: el.bookmarkNote.value.trim(),
+                date: Date.now()
+            });
+            saveState();
+            el.bookmarkDialog.classList.remove('show');
+            updateBookmarkIcon();
+            renderBookmarks();
+            renderLibrary();
+            showSnackbar('Bookmark added');
+        });
+
+        // TOC
+        el.tocBtn.addEventListener('click', openTOC);
+        el.tocClose.addEventListener('click', closeTOC);
+        el.tocBackdrop.addEventListener('click', closeTOC);
+
+        // FAB
+        el.fab.addEventListener('click', () => el.fileInput.click());
+
+        // File input
+        el.fileInput.addEventListener('change', handleFileImport);
+
+        // Drag and drop
+        document.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            el.dragOverlay.classList.add('show');
+        });
+        document.addEventListener('dragleave', (e) => {
+            if (e.relatedTarget === null) el.dragOverlay.classList.remove('show');
+        });
+        document.addEventListener('drop', (e) => {
+            e.preventDefault();
+            el.dragOverlay.classList.remove('show');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type === 'application/pdf') {
+                importPDF(file);
+            } else {
+                showSnackbar('Please drop a PDF file');
+            }
+        });
+
+        // Keyboard
+        document.addEventListener('keydown', (e) => {
+            if (!el.readerView.classList.contains('open')) return;
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') el.prevPage.click();
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') el.nextPage.click();
+            if (e.key === 'Escape') closeReader();
+        });
+
+        // Click on reader content to toggle bars
+        el.readerContent.addEventListener('click', (e) => {
+            if (e.target === el.readerContent) {
+                el.readerTopBar.classList.toggle('hidden');
+                el.readerBottomBar.classList.toggle('hidden');
+            }
+        });
+    }
+
+    // ── Re-render all visible ──
+    function reRenderAll() {
+        const page = state.currentPage;
+        state.renderedPages.clear();
+        el.readerContent.querySelectorAll('.pdf-page-container').forEach(c => {
+            c.innerHTML = '';
+            c.style.minHeight = '400px';
+        });
+        renderPage(page);
+        renderNearbyPages(page);
+        setTimeout(() => scrollToPage(page, false), 100);
+    }
+
+    // ── Close Reader ──
+    function closeReader() {
+        el.readerView.classList.remove('open');
+        el.fab.classList.remove('hidden');
+        state.currentPdf = null;
+        state.renderedPages.clear();
+        renderLibrary();
+    }
+
+    // ── TOC ──
+    function openTOC() {
+        el.tocPanel.classList.add('open');
+        el.tocBackdrop.classList.add('show');
+        // Update active
+        el.tocList.querySelectorAll('.toc-item').forEach((item, i) => {
+            item.classList.toggle('active', (i + 1) === state.currentPage);
+        });
+        // Scroll active into view
+        const active = el.tocList.querySelector('.toc-item.active');
+        if (active) active.scrollIntoView({ block: 'center' });
+    }
+    function closeTOC() {
+        el.tocPanel.classList.remove('open');
+        el.tocBackdrop.classList.remove('show');
+    }
+
+    // ── File Import ──
+    function handleFileImport(e) {
+        const file = e.target.files[0];
+        if (file && file.type === 'application/pdf') {
+            importPDF(file);
+        }
+        e.target.value = '';
+    }
+
+    async function importPDF(file) {
+        showLoading('Importing PDF…');
+
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const base64 = btoa(
+                new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+            );
+
+            // Get page count
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            const colors = ['#6750A4', '#7D5260', '#625B71', '#006D40', '#006493', '#8B4513'];
+            const book = {
+                id: 'imported_' + Date.now(),
+                title: file.name.replace('.pdf', ''),
+                author: 'Imported',
+                data: base64,
+                progress: 0,
+                pages: pdf.numPages,
+                lastPage: 1,
+                type: 'local',
+                color: colors[Math.floor(Math.random() * colors.length)]
+            };
+
+            state.books.unshift(book);
+            // We can't save large base64 to localStorage easily, but we can try
+            try { saveState(); } catch(e) { /* storage full, that's ok */ }
+
+            hideLoading();
+            renderLibrary();
+            showSnackbar(`"${book.title}" imported!`);
+
+        } catch (err) {
+            hideLoading();
+            console.error('Import error:', err);
+            showSnackbar('Failed to import PDF');
+        }
+    }
+
+    // ── Loading ──
+    function showLoading(text) {
+        el.loadingText.textContent = text || 'Loading…';
+        el.loadingOverlay.classList.add('show');
+    }
+    function hideLoading() {
+        el.loadingOverlay.classList.remove('show');
+    }
+
+    // ── Snackbar ──
+    let snackTimeout;
+    function showSnackbar(msg) {
+        clearTimeout(snackTimeout);
+        el.snackbar.textContent = msg;
+        el.snackbar.classList.add('show');
+        snackTimeout = setTimeout(() => el.snackbar.classList.remove('show'), 3000);
+    }
+
+    // ── Start ──
+    init();
+</script>
+</body>
+</html>
