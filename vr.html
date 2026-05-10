@@ -43,12 +43,18 @@
 "use strict";
 
 const PANO_URL='https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
-const CACHE_KEY='vr-pano-v5';
+const CACHE_KEY='vr-pano-v6';
 const GAZE_DUR=2.0;
-const CAM_SMOOTH=0.07;
-const TILT_SMOOTH=0.05;
-const FOV=Math.PI*0.48;
-const IPD=0.062;
+
+/* Adjustable VR settings */
+let vrSettings={
+    fov: 80,        // degrees
+    ipd: 62,        // mm
+    screenDist: 40, // mm (not used in rendering but stored)
+    oversample: 1.0 // multiplier
+};
+
+const CAM_SMOOTH=0.12;
 
 const APP_ICONS=[
     {name:'VR',url:'https://i.ibb.co/fdmh5byd/vr.png',id:'vr'},
@@ -62,11 +68,18 @@ const APP_ICONS=[
 let gl,canvas;
 let panoTexture=null;
 let loadDone=false,loadStarted=false;
+
+/* ═══════════════════════════════════════════
+   PURE GYROSCOPE ORIENTATION
+   We integrate angular velocity from gyroscope only.
+   No accelerometer, no magnetometer, no compass.
+   This is what WebXR does internally.
+   ═══════════════════════════════════════════ */
 let pitch=0,yaw=0,roll=0;
 let tPitch=0,tYaw=0,tRoll=0;
-let gyroReady=false,gyroCalibrated=false;
-let calAlpha=0,calBeta=0,calGamma=0;
-let curAlpha=0,curBeta=0,curGamma=0;
+let gyroReady=false;
+let lastGyroTime=0;
+
 let dragging=false,dragSX=0,dragSY=0,dragYaw0=0,dragPitch0=0;
 let gazeHit=null,gazeTimer=0,gazeProg=0;
 let prevTime=0,lastTexTime=0;
@@ -77,10 +90,13 @@ let texCard=null,texAppBGs=[],texCrosshair=null,texGazeRing=null;
 let texReady=false;
 let appIconImages=[],appIconsLoaded=0;
 let cameraAppOpen=false;
+let settingsOpen=false;
 let texCamView=null;
 let texCloseBtn=null;
+let texSettingsPanel=null;
+let texPrefsBtn=null;
 
-// Hand tracking
+/* Hand tracking */
 let camVideo=null;
 let camReady=false;
 let handTrackingReady=false;
@@ -94,6 +110,16 @@ let mpHands=null;
 
 let hoverStates={};
 APP_ICONS.forEach(a=>{hoverStates[a.id]={hover:false,prog:0}});
+hoverStates['prefs']={hover:false,prog:0};
+hoverStates['close']={hover:false,prog:0};
+// Settings slider buttons
+['fov_dec','fov_inc','ipd_dec','ipd_inc','dist_dec','dist_inc','os_dec','os_inc','settings_close'].forEach(k=>{
+    hoverStates[k]={hover:false,prog:0};
+});
+
+let needAppRebuild=false;
+let needSettingsRebuild=false;
+let needPrefsRebuild=false;
 
 function lockLS(){try{screen.orientation.lock('landscape-primary').catch(()=>{})}catch(e){}}
 function isLS(){return innerWidth>innerHeight}
@@ -102,8 +128,14 @@ function checkOrient(){
     if(isLS()){el.style.opacity='0';setTimeout(()=>{el.style.display='none';beginLoad()},550)}
     else{el.style.display='flex';el.style.opacity='1'}
 }
-window.addEventListener('resize',()=>{checkOrient();if(canvas){canvas.width=innerWidth*devicePixelRatio;canvas.height=innerHeight*devicePixelRatio}});
+window.addEventListener('resize',()=>{checkOrient();if(canvas){resizeCanvas()}});
 window.addEventListener('orientationchange',()=>setTimeout(checkOrient,350));
+
+function resizeCanvas(){
+    const os=vrSettings.oversample;
+    canvas.width=Math.floor(innerWidth*devicePixelRatio*os);
+    canvas.height=Math.floor(innerHeight*devicePixelRatio*os);
+}
 
 function beginLoad(){
     if(loadStarted)return;loadStarted=true;
@@ -146,7 +178,7 @@ function imgDone(img,ls){loadDone=true;ls.style.opacity='0';setTimeout(()=>{ls.s
 function loadAppIcons(){
     appIconImages=new Array(APP_ICONS.length).fill(null);
     APP_ICONS.forEach((app,i)=>{const img=new Image();img.crossOrigin='anonymous';
-        img.onload=()=>{appIconImages[i]=img;appIconsLoaded++;if(texReady)buildAppCardTextures()};
+        img.onload=()=>{appIconImages[i]=img;appIconsLoaded++;if(texReady)needAppRebuild=true};
         img.onerror=()=>{appIconsLoaded++};img.src=app.url});
 }
 
@@ -184,7 +216,7 @@ function initHandTracking(subEl){
         mpHands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:0.5,minTrackingConfidence:0.4});
         mpHands.onResults(onHandResults);
         handTrackingReady=true;
-        if(subEl)subEl.textContent='Hand tracking ready ✓';
+        if(subEl)subEl.textContent='Hand tracking ready';
         startHandLoop();
     }catch(e){if(subEl)subEl.textContent='Hand tracking error'}
 }
@@ -207,8 +239,6 @@ function onHandResults(results){
         for(let i=0;i<results.multiHandLandmarks.length;i++){
             const hand=results.multiHandedness[i];
             const lm=results.multiHandLandmarks[i];
-            // MediaPipe mirrors: "Right" label = user's left hand when using front cam
-            // We just assign based on label
             if(hand.label==='Right')leftHandLandmarks=lm;
             else rightHandLandmarks=lm;
         }
@@ -238,11 +268,85 @@ function updateHandState(){
     pinchClickRight=rightPinch&&!prevRightPinch;
 }
 
+/* ═══════════════════════════════════════════
+   PURE GYROSCOPE — Integration of angular velocity
+   This is exactly what WebXR does:
+   - Listen to 'devicemotion' for rotationRate (gyroscope)
+   - Integrate angular velocity over time to get orientation
+   - No accelerometer, no magnetometer
+   ═══════════════════════════════════════════ */
+
+function handleGyroMotion(e){
+    const rr=e.rotationRate;
+    if(!rr||rr.alpha===null)return;
+    
+    const now=performance.now();
+    if(lastGyroTime===0){lastGyroTime=now;gyroReady=true;return}
+    
+    const dtS=(now-lastGyroTime)/1000;
+    lastGyroTime=now;
+    
+    if(dtS>0.2)return; // skip large gaps
+    
+    const D=Math.PI/180;
+    
+    // rotationRate gives degrees/second:
+    // alpha = rotation around Z axis (device face normal)
+    // beta  = rotation around X axis (left-right axis)  
+    // gamma = rotation around Y axis (top-bottom axis)
+    
+    // In LANDSCAPE orientation (phone rotated 90° CW):
+    // Phone's X axis → screen horizontal → world horizontal
+    // Phone's Y axis → screen vertical → world vertical
+    // But axes are remapped:
+    //   Landscape yaw (looking left/right) = gyro alpha (Z rotation)
+    //   Landscape pitch (looking up/down) = gyro gamma (Y rotation) 
+    //   Landscape roll (head tilt) = gyro beta (X rotation)
+    
+    const gyroAlpha=rr.alpha*D; // deg/s → rad/s around Z
+    const gyroBeta=rr.beta*D;   // around X
+    const gyroGamma=rr.gamma*D; // around Y
+    
+    // Integrate angular velocity
+    // In landscape-primary (rotated 90° CCW from portrait):
+    // The device axes are swapped relative to the screen
+    
+    // Yaw: turning the phone left/right around the vertical axis
+    //   In landscape, this is primarily gyro alpha (Z-axis rotation)
+    tYaw += gyroAlpha * dtS;
+    
+    // Pitch: tilting phone up/down  
+    //   In landscape, this maps to gyro gamma
+    tPitch += gyroGamma * dtS;
+    
+    // Roll: tilting head sideways
+    //   In landscape, this maps to gyro beta
+    tRoll -= gyroBeta * dtS * 0.3;
+    
+    // Clamp pitch
+    tPitch=Math.max(-Math.PI*0.45,Math.min(Math.PI*0.45,tPitch));
+    tRoll=Math.max(-0.5,Math.min(0.5,tRoll));
+    
+    gyroReady=true;
+}
+
+function initGyro(){
+    window.addEventListener('devicemotion',handleGyroMotion,true);
+}
+
+function reqGyroPermission(){
+    if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+        DeviceMotionEvent.requestPermission().then(s=>{
+            if(s==='granted')window.addEventListener('devicemotion',handleGyroMotion,true);
+        }).catch(()=>{});
+    }
+}
+
 function initVR(img){
     lockLS();
     document.getElementById('vr-wrap').style.display='block';
     canvas=document.getElementById('glc');
-    canvas.width=innerWidth*devicePixelRatio;canvas.height=innerHeight*devicePixelRatio;
+    resizeCanvas();
     gl=canvas.getContext('webgl',{antialias:true,alpha:false})||canvas.getContext('experimental-webgl',{antialias:true,alpha:false});
     if(!gl){alert('WebGL not supported');return}
     gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
@@ -283,7 +387,7 @@ function buildSphere(latB,lonB,R){
 function setTexParams(t){gl.texParameteri(t,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(t,gl.TEXTURE_MAG_FILTER,gl.LINEAR)}
 
 function I(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
-function persp(fov,asp,n,f){const t=1/Math.tan(fov/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
+function persp(fovRad,asp,n,f){const t=1/Math.tan(fovRad/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
 function mul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s}return o}
 function rX(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[5]=c;r[6]=s;r[9]=-s;r[10]=c;return mul(m,r)}
 function rY(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[2]=-s;r[8]=s;r[10]=c;return mul(m,r)}
@@ -291,78 +395,6 @@ function rZ(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[1]=s;r[4]=-s;r
 function tr(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mul(m,t)}
 function sc(m,x,y,z){const s=I();s[0]=x;s[5]=y;s[10]=z;return mul(m,s)}
 function viewMatrix(){let m=I();m=rZ(m,roll);m=rX(m,pitch);m=rY(m,yaw);return m}
-
-/* ═══════════════════════════════════════════
-   GYROSCOPE — FIXED AXIS MAPPING
-   
-   Phone in landscape (long edge horizontal):
-   
-   ISSUE FIX #1: Left/Right was same direction → now INVERTED (negate alpha)
-   ISSUE FIX #2: Looking up caused snap to bottom → 
-     The problem was gamma wrapping at ±90°. 
-     In landscape, beta controls pitch (not gamma).
-     We use beta for pitch and gamma for roll.
-   
-   Correct landscape mapping:
-   - alpha: compass heading → YAW (negated for inversion)
-   - beta:  tilt forward/back → PITCH in landscape (negated for inversion)  
-   - gamma: tilt left/right → ROLL in landscape (negated for inversion)
-   ═══════════════════════════════════════════ */
-
-function wrapAngle(a){while(a>180)a-=360;while(a<-180)a+=360;return a}
-
-function handleOrientationEvent(e){
-    if(e.alpha===null||e.beta===null||e.gamma===null)return;
-    curAlpha=e.alpha;curBeta=e.beta;curGamma=e.gamma;
-    if(!gyroCalibrated){
-        calAlpha=e.alpha;calBeta=e.beta;calGamma=e.gamma;
-        gyroCalibrated=true;gyroReady=true;
-    }
-}
-
-function initGyro(){
-    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission!=='function')
-        window.addEventListener('deviceorientation',handleOrientationEvent,true);
-}
-
-function reqGyroPermission(){
-    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function')
-        DeviceOrientationEvent.requestPermission().then(s=>{if(s==='granted')window.addEventListener('deviceorientation',handleOrientationEvent,true)}).catch(()=>{});
-}
-
-function updateGyro(){
-    if(!gyroReady)return;
-    const D=Math.PI/180;
-    
-    // Delta from calibration point
-    let dAlpha=wrapAngle(curAlpha-calAlpha);
-    let dBeta=wrapAngle(curBeta-calBeta);
-    let dGamma=curGamma-calGamma;
-    
-    // FIX #1: NEGATE alpha so left rotation → right view movement
-    // FIX #2: Use BETA for pitch (not gamma) in landscape mode
-    //         Beta has full -180 to 180 range, no wrapping issues
-    //         Gamma only has -90 to 90 which causes the snap
-    
-    // In landscape-primary orientation:
-    // Turning head left/right changes alpha → controls yaw
-    // Nodding up/down changes beta → controls pitch  
-    // Tilting head sideways changes gamma → controls roll
-    
-    // NEGATE for opposite direction (move phone left → view goes right)
-    tYaw = -dAlpha * D;
-    
-    // Beta for pitch - NEGATE for opposite (tilt phone up → view goes down)
-    // Beta doesn't wrap at ±90° so no snapping
-    tPitch = -dBeta * D;
-    
-    // Gamma for roll - subtle
-    tRoll = dGamma * D * 0.25;
-    
-    // Clamp to reasonable ranges
-    tPitch = Math.max(-Math.PI*0.48, Math.min(Math.PI*0.48, tPitch));
-    tRoll = Math.max(-0.35, Math.min(0.35, tRoll));
-}
 
 function initTouch(){
     canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging=true;dragSX=e.touches[0].clientX;dragSY=e.touches[0].clientY;dragYaw0=tYaw;dragPitch0=tPitch}e.preventDefault()},{passive:false});
@@ -387,10 +419,11 @@ function updateCardTexture(){
     x.fillStyle=g;x.fillRect(0,0,512,200);
     x.fillStyle='#fff';x.textAlign='center';x.font="bold 56px 'Inter',sans-serif";x.fillText(ts,256,88);
     x.fillStyle='rgba(255,255,255,0.65)';x.font="18px 'Inter',sans-serif";x.fillText(ds,256,140);
+    // Hand tracking status
+    const htStatus=handTrackingReady?(leftHandLandmarks||rightHandLandmarks?'🤚 Hands Detected':'✋ Hands Ready'):'⏳ No Hands';
+    x.fillStyle='rgba(255,255,255,0.35)';x.font="12px 'Inter',sans-serif";x.fillText(htStatus,256,175);
     if(texCard)gl.deleteTexture(texCard);texCard=mkTex(c);
 }
-
-let needAppRebuild=false;
 
 function buildAppCardTextures(){
     texAppBGs.forEach(t=>{if(t)gl.deleteTexture(t)});texAppBGs=[];
@@ -406,9 +439,99 @@ function buildAppCardTextures(){
         if(img){x.save();rRect(x,30,20,100,100,16);x.clip();x.drawImage(img,30,20,100,100);x.restore()}
         else{x.font='50px sans-serif';x.textAlign='center';x.fillText('📱',80,82)}
         x.fillStyle='rgba(255,255,255,0.85)';x.font="600 12px 'Inter',sans-serif";x.textAlign='center';x.fillText(app.name,80,145);
-        if(hs&&hs.prog>0){x.fillStyle=`rgba(0,200,255,${0.3+hs.prog*0.4})`;rRect(x,20,150,120*hs.prog,4,2);x.fill()}
         texAppBGs.push(mkTex(c));
     });
+}
+
+function buildPrefsButton(){
+    const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');
+    const hs=hoverStates['prefs'];
+    const hp=hs?hs.prog:0;
+    x.fillStyle=`rgba(255,255,255,${0.05+hp*0.08})`;rRect(x,2,2,252,60,16);x.fill();
+    x.strokeStyle=`rgba(${hp>0?'0,200,255':'255,255,255'},${0.12+hp*0.4})`;
+    x.lineWidth=1+hp*1.2;rRect(x,2,2,252,60,16);x.stroke();
+    x.fillStyle=`rgba(255,255,255,${0.7+hp*0.3})`;x.font="600 16px 'Inter',sans-serif";x.textAlign='center';
+    x.fillText('⚙  Preferences',128,38);
+    if(texPrefsBtn)gl.deleteTexture(texPrefsBtn);
+    texPrefsBtn=mkTex(c);
+}
+
+function buildSettingsPanel(){
+    const c=document.createElement('canvas');c.width=600;c.height=500;const x=c.getContext('2d');
+    
+    // Background
+    x.fillStyle='rgba(8,8,35,0.95)';rRect(x,0,0,600,500,24);x.fill();
+    x.strokeStyle='rgba(100,180,255,0.2)';x.lineWidth=1.5;rRect(x,0,0,600,500,24);x.stroke();
+    
+    // Title bar
+    x.fillStyle='rgba(255,255,255,0.04)';x.fillRect(0,0,600,52);
+    x.fillStyle='#fff';x.font="700 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('VR Settings',300,35);
+    
+    // Close X button area (top right)
+    const closeHs=hoverStates['settings_close'];
+    const closeHp=closeHs?closeHs.prog:0;
+    x.fillStyle=`rgba(255,60,60,${0.3+closeHp*0.5})`;
+    x.beginPath();x.arc(560,26,16,0,Math.PI*2);x.fill();
+    x.strokeStyle='#fff';x.lineWidth=2.5;x.lineCap='round';
+    x.beginPath();x.moveTo(552,18);x.lineTo(568,34);x.stroke();
+    x.beginPath();x.moveTo(568,18);x.lineTo(552,34);x.stroke();
+    
+    // Settings items
+    const settings=[
+        {label:'Lens Field of View',key:'fov',val:vrSettings.fov,unit:'°',min:50,max:120,step:2},
+        {label:'Inter Lens Distance',key:'ipd',val:vrSettings.ipd,unit:'mm',min:50,max:80,step:1},
+        {label:'Screen to Lens Distance',key:'dist',val:vrSettings.screenDist,unit:'mm',min:20,max:80,step:1},
+        {label:'Oversampling',key:'os',val:vrSettings.oversample,unit:'x',min:0.5,max:2.0,step:0.1},
+    ];
+    
+    settings.forEach((s,i)=>{
+        const y0=80+i*100;
+        
+        // Label
+        x.fillStyle='rgba(255,255,255,0.75)';x.font="500 16px 'Inter',sans-serif";x.textAlign='left';
+        x.fillText(s.label,40,y0+20);
+        
+        // Value
+        x.fillStyle='rgba(0,200,255,0.9)';x.font="700 18px 'Inter',sans-serif";x.textAlign='right';
+        const valStr=s.key==='os'?s.val.toFixed(1):Math.round(s.val).toString();
+        x.fillText(valStr+s.unit,560,y0+20);
+        
+        // < button
+        const decHs=hoverStates[s.key+'_dec'];
+        const decHp=decHs?decHs.prog:0;
+        x.fillStyle=`rgba(255,255,255,${0.08+decHp*0.15})`;
+        rRect(x,40,y0+35,50,35,10);x.fill();
+        x.strokeStyle=`rgba(${decHp>0?'0,200,255':'255,255,255'},${0.2+decHp*0.5})`;
+        x.lineWidth=1;rRect(x,40,y0+35,50,35,10);x.stroke();
+        x.fillStyle=`rgba(255,255,255,${0.7+decHp*0.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';
+        x.fillText('<',65,y0+58);
+        
+        // Slider track
+        const sliderX=110,sliderW=370,sliderY=y0+52;
+        x.fillStyle='rgba(255,255,255,0.1)';rRect(x,sliderX,sliderY-3,sliderW,6,3);x.fill();
+        
+        // Slider fill
+        const pct=(s.val-s.min)/(s.max-s.min);
+        x.fillStyle='rgba(0,160,255,0.5)';rRect(x,sliderX,sliderY-3,sliderW*pct,6,3);x.fill();
+        
+        // Slider thumb
+        const thumbX=sliderX+sliderW*pct;
+        x.fillStyle='rgba(0,200,255,0.9)';x.beginPath();x.arc(thumbX,sliderY,10,0,Math.PI*2);x.fill();
+        x.fillStyle='#fff';x.beginPath();x.arc(thumbX,sliderY,5,0,Math.PI*2);x.fill();
+        
+        // > button
+        const incHs=hoverStates[s.key+'_inc'];
+        const incHp=incHs?incHs.prog:0;
+        x.fillStyle=`rgba(255,255,255,${0.08+incHp*0.15})`;
+        rRect(x,500,y0+35,50,35,10);x.fill();
+        x.strokeStyle=`rgba(${incHp>0?'0,200,255':'255,255,255'},${0.2+incHp*0.5})`;
+        x.lineWidth=1;rRect(x,500,y0+35,50,35,10);x.stroke();
+        x.fillStyle=`rgba(255,255,255,${0.7+incHp*0.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';
+        x.fillText('>',525,y0+58);
+    });
+    
+    if(texSettingsPanel)gl.deleteTexture(texSettingsPanel);
+    texSettingsPanel=mkTex(c);
 }
 
 function buildCrosshairTexture(){
@@ -422,19 +545,34 @@ function buildCrosshairTexture(){
 
 function buildGazeTexture(prog){
     const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
-    x.strokeStyle='rgba(255,255,255,0.2)';x.lineWidth=4;x.beginPath();x.arc(64,64,30,0,Math.PI*2);x.stroke();
-    if(prog>0){x.strokeStyle='rgba(0,200,255,0.9)';x.lineWidth=4;x.lineCap='round';x.beginPath();x.arc(64,64,30,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);x.stroke()}
-    if(prog>0){x.fillStyle=`rgba(0,200,255,${prog*0.25})`;x.beginPath();x.arc(64,64,26,0,Math.PI*2);x.fill()}
-    x.fillStyle='rgba(255,255,255,0.9)';x.beginPath();x.arc(64,64,3.5,0,Math.PI*2);x.fill();
+    // Outer ring background
+    x.strokeStyle='rgba(255,255,255,0.15)';x.lineWidth=5;x.beginPath();x.arc(64,64,32,0,Math.PI*2);x.stroke();
+    // Fill arc
+    if(prog>0){
+        x.strokeStyle='rgba(0,200,255,0.95)';x.lineWidth=5;x.lineCap='round';
+        x.beginPath();x.arc(64,64,32,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);x.stroke();
+        // Glow
+        x.shadowColor='rgba(0,200,255,0.6)';x.shadowBlur=12;
+        x.strokeStyle='rgba(0,200,255,0.4)';x.lineWidth=8;
+        x.beginPath();x.arc(64,64,32,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);x.stroke();
+        x.shadowBlur=0;
+        // Inner fill
+        x.fillStyle=`rgba(0,200,255,${prog*0.15})`;x.beginPath();x.arc(64,64,28,0,Math.PI*2);x.fill();
+    }
+    // Center dot
+    x.fillStyle=`rgba(255,255,255,${0.7+prog*0.3})`;x.beginPath();x.arc(64,64,3.5,0,Math.PI*2);x.fill();
+    // Crosshair lines
     x.strokeStyle=`rgba(255,255,255,${0.5+prog*0.3})`;x.lineWidth=1.5;
-    [[64,28,64,42],[64,86,64,100],[28,64,42,64],[86,64,100,64]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
+    [[64,26,64,42],[64,86,64,102],[26,64,42,64],[86,64,102,64]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
     if(texGazeRing)gl.deleteTexture(texGazeRing);texGazeRing=mkTex(c);
 }
 
 function buildCloseTexture(){
     const c=document.createElement('canvas');c.width=80;c.height=80;const x=c.getContext('2d');
-    x.fillStyle='rgba(255,40,40,0.75)';x.beginPath();x.arc(40,40,26,0,Math.PI*2);x.fill();
-    x.strokeStyle='rgba(255,120,120,0.3)';x.lineWidth=1.5;x.beginPath();x.arc(40,40,26,0,Math.PI*2);x.stroke();
+    const hs=hoverStates['close'];
+    const hp=hs?hs.prog:0;
+    x.fillStyle=`rgba(255,40,40,${0.5+hp*0.4})`;x.beginPath();x.arc(40,40,28,0,Math.PI*2);x.fill();
+    if(hp>0){x.strokeStyle=`rgba(255,150,150,${hp*0.6})`;x.lineWidth=2;x.beginPath();x.arc(40,40,28,0,Math.PI*2);x.stroke()}
     x.strokeStyle='#fff';x.lineWidth=3.5;x.lineCap='round';
     x.beginPath();x.moveTo(26,26);x.lineTo(54,54);x.stroke();
     x.beginPath();x.moveTo(54,26);x.lineTo(26,54);x.stroke();
@@ -444,24 +582,19 @@ function buildCloseTexture(){
 function updateCameraTexture(){
     if(!camReady||!camVideo||camVideo.readyState<2)return;
     const c=document.createElement('canvas');c.width=512;c.height=384;const x=c.getContext('2d');
-    // Window frame
     x.fillStyle='rgba(6,6,28,0.95)';rRect(x,0,0,512,384,20);x.fill();
     x.strokeStyle='rgba(255,255,255,0.15)';x.lineWidth=1.5;rRect(x,0,0,512,384,20);x.stroke();
-    // Title bar
     x.fillStyle='rgba(255,255,255,0.05)';x.fillRect(0,0,512,36);
-    x.fillStyle='#fff';x.font="600 14px 'Inter',sans-serif";x.textAlign='center';x.fillText('Camera',256,24);
-    // Camera feed
-    x.save();
-    rRect(x,16,44,480,324,10);x.clip();
+    x.fillStyle='#fff';x.font="600 14px 'Inter',sans-serif";x.textAlign='center';x.fillText('📷 Camera',256,24);
+    x.save();rRect(x,16,44,480,324,10);x.clip();
     try{x.drawImage(camVideo,16,44,480,324)}catch(e){}
     x.restore();
-    // Border around feed
     x.strokeStyle='rgba(255,255,255,0.1)';x.lineWidth=1;rRect(x,16,44,480,324,10);x.stroke();
     if(texCamView)gl.deleteTexture(texCamView);
     texCamView=mkTex(c);
 }
 
-/* Hand skeleton - COMBINED into single overlay texture */
+/* Hand skeleton overlay */
 const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 const FINGER_COLORS=['#ff4466','#ffaa00','#44ff66','#4488ff','#cc44ff'];
 
@@ -470,55 +603,42 @@ function buildCombinedHandTexture(){
         if(handTexCombined){gl.deleteTexture(handTexCombined);handTexCombined=null}
         return;
     }
-    const c=document.createElement('canvas');c.width=512;c.height=256;const x=c.getContext('2d');
-    x.clearRect(0,0,512,256);
-    
-    // Draw both hands in the same canvas
-    // Both hands use the SAME coordinate system: just draw raw landmarks
-    // No mirroring - both hands tracked as-is from camera
+    const c=document.createElement('canvas');c.width=512;c.height=512;const x=c.getContext('2d');
+    x.clearRect(0,0,512,512);
     
     function drawHand(landmarks){
         if(!landmarks)return;
-        // Draw connections
         HAND_CONNECTIONS.forEach(([a,b])=>{
             const la=landmarks[a],lb=landmarks[b];
             const fi=Math.floor(Math.max(a,b)/4);
             x.strokeStyle=FINGER_COLORS[Math.min(fi,4)];
-            x.lineWidth=3;x.lineCap='round';
-            x.beginPath();
-            x.moveTo(la.x*512,la.y*256);
-            x.lineTo(lb.x*512,lb.y*256);
-            x.stroke();
+            x.lineWidth=3;x.lineCap='round';x.globalAlpha=0.8;
+            x.beginPath();x.moveTo(la.x*512,la.y*512);x.lineTo(lb.x*512,lb.y*512);x.stroke();
         });
-        // Draw joints
+        x.globalAlpha=1;
         landmarks.forEach((lm,i)=>{
             const fi=Math.floor(i/4);
             x.fillStyle=FINGER_COLORS[Math.min(fi,4)];
-            x.beginPath();x.arc(lm.x*512,lm.y*256,4,0,Math.PI*2);x.fill();
-            x.strokeStyle='rgba(255,255,255,0.6)';x.lineWidth=1;
-            x.beginPath();x.arc(lm.x*512,lm.y*256,4,0,Math.PI*2);x.stroke();
+            x.beginPath();x.arc(lm.x*512,lm.y*512,5,0,Math.PI*2);x.fill();
+            x.strokeStyle='rgba(255,255,255,0.5)';x.lineWidth=1;
+            x.beginPath();x.arc(lm.x*512,lm.y*512,5,0,Math.PI*2);x.stroke();
         });
-        // Pinch indicator
         const thumb=landmarks[4],idx=landmarks[8];
-        const mx=(thumb.x+idx.x)/2*512,my=(thumb.y+idx.y)/2*256;
+        const mx=(thumb.x+idx.x)/2*512,my=(thumb.y+idx.y)/2*512;
         const dist=Math.sqrt((thumb.x-idx.x)**2+(thumb.y-idx.y)**2);
         const pinching=dist<0.07;
-        
-        x.beginPath();x.arc(mx,my,pinching?14:9,0,Math.PI*2);
-        x.fillStyle=pinching?'rgba(0,255,150,0.7)':'rgba(255,255,255,0.3)';x.fill();
-        x.strokeStyle=pinching?'rgba(0,255,200,0.9)':'rgba(255,255,255,0.5)';x.lineWidth=2;
-        x.beginPath();x.arc(mx,my,pinching?14:9,0,Math.PI*2);x.stroke();
+        x.beginPath();x.arc(mx,my,pinching?16:10,0,Math.PI*2);
+        x.fillStyle=pinching?'rgba(0,255,150,0.7)':'rgba(255,255,255,0.25)';x.fill();
         if(pinching){
-            x.shadowColor='rgba(0,255,150,0.5)';x.shadowBlur=15;
-            x.fillStyle='rgba(0,255,150,0.3)';x.beginPath();x.arc(mx,my,18,0,Math.PI*2);x.fill();
+            x.shadowColor='rgba(0,255,150,0.6)';x.shadowBlur=20;
+            x.fillStyle='rgba(0,255,150,0.25)';x.beginPath();x.arc(mx,my,22,0,Math.PI*2);x.fill();
             x.shadowBlur=0;
         }
-        // Fingertip circles
         [landmarks[4],landmarks[8]].forEach((tip,ti)=>{
-            x.beginPath();x.arc(tip.x*512,tip.y*256,6,0,Math.PI*2);
+            x.beginPath();x.arc(tip.x*512,tip.y*512,7,0,Math.PI*2);
             x.fillStyle=ti===0?'rgba(255,100,100,0.6)':'rgba(100,200,255,0.6)';x.fill();
             x.strokeStyle='#fff';x.lineWidth=1.5;
-            x.beginPath();x.arc(tip.x*512,tip.y*256,6,0,Math.PI*2);x.stroke();
+            x.beginPath();x.arc(tip.x*512,tip.y*512,7,0,Math.PI*2);x.stroke();
         });
     }
     
@@ -529,10 +649,45 @@ function buildCombinedHandTexture(){
     handTexCombined=mkTex(c);
 }
 
-/* Gaze & Pinch interaction */
+/* World-space interactive element positions */
 function getAppPositions(){
     const startX=-3.75,spacing=1.5;
     return APP_ICONS.map((a,i)=>({...a,pos:[startX+i*spacing,-1.0,-5],w:1.0,h:1.0,idx:i}));
+}
+
+function getPrefsPos(){return{pos:[0,-2.6,-5],w:2.0,h:0.5}}
+function getSettingsPos(){return{pos:[0,-0.5,-5],w:5.0,h:4.2}}
+function getSettingsClosePos(){return{pos:[2.15,1.5,-5],w:0.45,h:0.45}}
+function getClosePos(){return{pos:[0,3.0,-5],w:0.65,h:0.65}}
+
+function getSettingsButtonPositions(){
+    // Matches the settings panel layout
+    // Panel is 5.0 wide, 4.2 tall at [0,-0.5,-5]
+    // Panel canvas is 600x500, mapped to 5.0x4.2
+    // Each setting row: y0 = 80 + i*100 in canvas coords
+    // < button at canvas (40, y0+35, 50, 35) → world coords
+    // > button at canvas (500, y0+35, 50, 35)
+    const pW=5.0,pH=4.2,pX=0,pY=-0.5,pZ=-5;
+    const cW=600,cH=500;
+    const keys=['fov','ipd','dist','os'];
+    const results=[];
+    keys.forEach((k,i)=>{
+        const cy0=80+i*100;
+        // < button: canvas center (65, cy0+52)
+        const decCX=65,decCY=cy0+52;
+        const decWX=pX+(decCX/cW-0.5)*pW;
+        const decWY=pY+(0.5-decCY/cH)*pH;
+        results.push({id:k+'_dec',pos:[decWX,decWY,pZ],w:0.42,h:0.3});
+        // > button: canvas center (525, cy0+52)
+        const incCX=525,incCY=cy0+52;
+        const incWX=pX+(incCX/cW-0.5)*pW;
+        const incWY=pY+(0.5-incCY/cH)*pH;
+        results.push({id:k+'_inc',pos:[incWX,incWY,pZ],w:0.42,h:0.3});
+    });
+    // Close button
+    const scPos=getSettingsClosePos();
+    results.push({id:'settings_close',pos:scPos.pos,w:scPos.w,h:scPos.h});
+    return results;
 }
 
 function gazeDir(){return[-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)]}
@@ -544,83 +699,112 @@ function hitQuad(dir,pos,w,h){
     return hx>=pos[0]-w/2&&hx<=pos[0]+w/2&&hy>=pos[1]-h/2&&hy<=pos[1]+h/2;
 }
 
-// Convert pinch screen coords to a ray and test against world quads
 function pinchRayHit(pinchPt,pos,w,h){
     if(!pinchPt)return false;
-    // pinchPt.x/y are 0-1 normalized camera coords
-    // Map to view-space ray direction
+    const fovRad=vrSettings.fov*Math.PI/180;
     const asp=(canvas.width/2)/canvas.height;
-    const halfFovTan=Math.tan(FOV/2);
-    // Pinch x/y: 0=left/top, 1=right/bottom
-    const ndcX=(pinchPt.x-0.5)*2; // -1 to 1
-    const ndcY=-(pinchPt.y-0.5)*2; // -1 to 1 (flip Y)
-    
-    // Ray in view space
+    const halfFovTan=Math.tan(fovRad/2);
+    const ndcX=(pinchPt.x-0.5)*2;
+    const ndcY=-(pinchPt.y-0.5)*2;
     const rx=ndcX*halfFovTan*asp;
     const ry=ndcY*halfFovTan;
     const rz=-1;
     const len=Math.sqrt(rx*rx+ry*ry+rz*rz);
-    
-    // Transform ray to world space using current yaw/pitch
     const cy=Math.cos(yaw),sy=Math.sin(yaw);
     const cp=Math.cos(pitch),sp=Math.sin(pitch);
-    
-    // Rotate by pitch then yaw
-    const dx1=rx/len, dy1=(ry*cp-rz*sp)/len, dz1=(ry*sp+rz*cp)/len;
-    const dx=dx1*cy+dz1*sy, dy=dy1, dz=-dx1*sy+dz1*cy;
-    
-    const dir=[dx,dy,dz];
-    return hitQuad(dir,pos,w,h);
+    const dx1=rx/len,dy1=(ry*cp-rz*sp)/len,dz1=(ry*sp+rz*cp)/len;
+    const dx=dx1*cy+dz1*sy,dy=dy1,dz=-dx1*sy+dz1*cy;
+    return hitQuad([dx,dy,dz],pos,w,h);
+}
+
+function adjustSetting(key,delta){
+    const defs={fov:{min:50,max:120,step:2},ipd:{min:50,max:80,step:1},dist:{min:20,max:80,step:1},os:{min:0.5,max:2.0,step:0.1}};
+    const d=defs[key];if(!d)return;
+    const map={fov:'fov',ipd:'ipd',dist:'screenDist',os:'oversample'};
+    const prop=map[key];
+    vrSettings[prop]=Math.round(Math.max(d.min,Math.min(d.max,vrSettings[prop]+delta*d.step))*100)/100;
+    if(key==='os')resizeCanvas();
+    needSettingsRebuild=true;
 }
 
 function triggerApp(id){
-    if(id==='camera'){cameraAppOpen=true}
+    if(id==='camera'){cameraAppOpen=true;settingsOpen=false}
+    else if(id==='settings'){settingsOpen=!settingsOpen;cameraAppOpen=false}
+}
+
+function triggerAction(id){
+    if(id==='prefs'){settingsOpen=!settingsOpen;cameraAppOpen=false;needSettingsRebuild=true}
+    else if(id==='close'){cameraAppOpen=false}
+    else if(id==='settings_close'){settingsOpen=false}
+    else if(id.endsWith('_dec')){const key=id.replace('_dec','');adjustSetting(key,-1)}
+    else if(id.endsWith('_inc')){const key=id.replace('_inc','');adjustSetting(key,1)}
 }
 
 function checkGaze(dt){
     const dir=gazeDir();
     let hit=null;
     
+    // Build list of all interactive elements
+    let interactables=[];
+    
     if(cameraAppOpen){
-        // Check close button
-        if(hitQuad(dir,[0,3.0,-5],0.65,0.65))hit='close';
-        // Check pinch on close
-        if(pinchClickLeft||pinchClickRight){
-            const pt=pinchClickLeft?leftPinchPoint:rightPinchPoint;
-            if(pinchRayHit(pt,[0,3.0,-5],0.65,0.65)){
-                cameraAppOpen=false;gazeTimer=0;gazeProg=0;gazeHit=null;return;
-            }
-        }
+        interactables.push({id:'close',...getClosePos()});
+    }else if(settingsOpen){
+        interactables.push(...getSettingsButtonPositions());
     }else{
         const apps=getAppPositions();
-        for(const app of apps){if(hitQuad(dir,app.pos,app.w,app.h)){hit=app.id;break}}
-        // Check pinch clicks on apps
-        if(pinchClickLeft||pinchClickRight){
-            const pt=pinchClickLeft?leftPinchPoint:rightPinchPoint;
-            for(const app of apps){
-                if(pinchRayHit(pt,app.pos,app.w,app.h)){triggerApp(app.id);return}
+        apps.forEach(a=>interactables.push({id:a.id,pos:a.pos,w:a.w,h:a.h}));
+        const pp=getPrefsPos();
+        interactables.push({id:'prefs',pos:pp.pos,w:pp.w,h:pp.h});
+    }
+    
+    // Test gaze against all interactables
+    for(const item of interactables){
+        if(hitQuad(dir,item.pos,item.w,item.h)){hit=item.id;break}
+    }
+    
+    // Test pinch clicks
+    if(pinchClickLeft||pinchClickRight){
+        const pt=pinchClickLeft?leftPinchPoint:rightPinchPoint;
+        for(const item of interactables){
+            if(pinchRayHit(pt,item.pos,item.w,item.h)){
+                if(['close','prefs','settings_close'].includes(item.id)||item.id.endsWith('_dec')||item.id.endsWith('_inc')){
+                    triggerAction(item.id);
+                }else{
+                    triggerApp(item.id);
+                }
+                gazeTimer=0;gazeProg=0;gazeHit=null;return;
             }
         }
     }
     
-    // Hover states
+    // Update hover states for all known keys
     let anyChanged=false;
-    APP_ICONS.forEach(app=>{
-        const hs=hoverStates[app.id];
-        const isHit=hit===app.id;
+    Object.keys(hoverStates).forEach(key=>{
+        const hs=hoverStates[key];
+        const isHit=hit===key;
         if(isHit!==hs.hover){hs.hover=isHit;anyChanged=true}
         if(hs.hover){const o=hs.prog;hs.prog=Math.min(hs.prog+dt*0.5,1);if(Math.abs(hs.prog-o)>0.01)anyChanged=true}
         else{const o=hs.prog;hs.prog=Math.max(hs.prog-dt*2,0);if(Math.abs(hs.prog-o)>0.01)anyChanged=true}
     });
-    if(anyChanged)needAppRebuild=true;
+    if(anyChanged){
+        needAppRebuild=true;
+        needPrefsRebuild=true;
+        needSettingsRebuild=true;
+        // Rebuild close button if hovering
+        if(cameraAppOpen)buildCloseTexture();
+    }
     
-    // Gaze timer
+    // Gaze timer for activation
     if(hit){
         if(gazeHit===hit){
             gazeTimer+=dt;gazeProg=Math.min(gazeTimer/GAZE_DUR,1.0);
             if(gazeTimer>=GAZE_DUR){
-                if(hit==='close')cameraAppOpen=false;
-                else triggerApp(hit);
+                if(['close','prefs','settings_close'].includes(hit)||hit.endsWith('_dec')||hit.endsWith('_inc')){
+                    triggerAction(hit);
+                }else{
+                    triggerApp(hit);
+                }
                 gazeTimer=0;gazeProg=0;gazeHit=null;
             }
         }else{gazeHit=hit;gazeTimer=0;gazeProg=0}
@@ -642,7 +826,7 @@ function drawTexQuad(proj,view,pos,w,h,tex){
 }
 
 function renderEye(proj,view){
-    // Panorama
+    // Panorama sphere
     gl.useProgram(progPano);gl.disable(gl.DEPTH_TEST);
     const aP=gl.getAttribLocation(progPano,'aP'),aT=gl.getAttribLocation(progPano,'aT');
     gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);
@@ -656,53 +840,67 @@ function renderEye(proj,view){
     gl.drawElements(gl.TRIANGLES,sphereCount,gl.UNSIGNED_SHORT,0);
     gl.disableVertexAttribArray(aT);gl.enable(gl.DEPTH_TEST);
     
-    // Time card
+    // Time card (always visible above)
     drawTexQuad(proj,view,[0,2.2,-5],4,1.8,texCard);
     
     if(cameraAppOpen){
-        // Camera window
         if(texCamView)drawTexQuad(proj,view,[0,0.5,-5],5,3.75,texCamView);
-        if(texCloseBtn)drawTexQuad(proj,view,[0,3.0,-5],0.5,0.5,texCloseBtn);
+        if(texCloseBtn)drawTexQuad(proj,view,...Object.values(getClosePos()),0.5,0.5,texCloseBtn);
+        // Fix: getClosePos returns {pos, w, h}
+        const cp=getClosePos();
+        drawTexQuad(proj,view,cp.pos,cp.w-0.15,cp.h-0.15,texCloseBtn);
+    }else if(settingsOpen){
+        // Settings panel
+        const sp=getSettingsPos();
+        if(texSettingsPanel)drawTexQuad(proj,view,sp.pos,sp.w,sp.h,texSettingsPanel);
     }else{
         // App icons
         const apps=getAppPositions();
         apps.forEach((a,i)=>{if(texAppBGs[i])drawTexQuad(proj,view,a.pos,a.w,a.h,texAppBGs[i])});
+        // Preferences button
+        const pp=getPrefsPos();
+        if(texPrefsBtn)drawTexQuad(proj,view,pp.pos,pp.w,pp.h,texPrefsBtn);
     }
     
-    // HUD layer (crosshair + hands) - rendered in screen space, moves with view
+    // HUD layer (crosshair + hands) rendered at fixed screen position
     gl.disable(gl.DEPTH_TEST);
+    const fovRad=vrSettings.fov*Math.PI/180;
     const asp2=(canvas.width/2)/canvas.height;
-    const cP=persp(FOV,asp2,0.1,100);
+    const cP=persp(fovRad,asp2,0.01,100);
     const cV=I();
     
-    // Hands overlay - rendered in screen space so they move with crosshair
+    // Hands overlay — rendered at crosshair depth, filling lower portion
     if(handTexCombined){
-        drawTexQuad(cP,cV,[0,0,-2],1.6,0.8,handTexCombined);
+        drawTexQuad(cP,cV,[0,-0.15,-1.5],1.2,1.2,handTexCombined);
     }
     
-    // Crosshair on top
+    // Crosshair / gaze ring
     const crossTex=gazeHit?texGazeRing:texCrosshair;
-    const crossSize=gazeHit?0.22:0.14;
-    drawTexQuad(cP,cV,[0,0,-2],crossSize,crossSize,crossTex);
+    const crossSize=gazeHit?0.18:0.1;
+    drawTexQuad(cP,cV,[0,0,-1.5],crossSize,crossSize,crossTex);
     
     gl.enable(gl.DEPTH_TEST);
 }
 
 function renderFrame(){
+    const fovRad=vrSettings.fov*Math.PI/180;
+    const ipdM=vrSettings.ipd/1000;
     const hw=Math.floor(canvas.width/2);const asp=hw/canvas.height;
     gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const v=viewMatrix();
-    gl.viewport(0,0,hw,canvas.height);renderEye(persp(FOV,asp,0.1,100),mul(v,tr(I(),IPD*0.5,0,0)));
-    gl.viewport(hw,0,hw,canvas.height);renderEye(persp(FOV,asp,0.1,100),mul(v,tr(I(),-IPD*0.5,0,0)));
+    gl.viewport(0,0,hw,canvas.height);renderEye(persp(fovRad,asp,0.1,100),mul(v,tr(I(),ipdM*0.5,0,0)));
+    gl.viewport(hw,0,hw,canvas.height);renderEye(persp(fovRad,asp,0.1,100),mul(v,tr(I(),-ipdM*0.5,0,0)));
 }
-
-let handUpdateTimer=0;
 
 function mainLoop(now){
     requestAnimationFrame(mainLoop);
     const dt=Math.min((now-prevTime)/1000,0.1);prevTime=now;
     
-    if(!texReady){updateCardTexture();buildAppCardTextures();buildCrosshairTexture();buildGazeTexture(0);buildCloseTexture();texReady=true}
+    if(!texReady){
+        updateCardTexture();buildAppCardTextures();buildCrosshairTexture();
+        buildGazeTexture(0);buildCloseTexture();buildPrefsButton();buildSettingsPanel();
+        texReady=true;
+    }
     
     if(now-lastTexTime>400){
         updateCardTexture();
@@ -710,23 +908,24 @@ function mainLoop(now){
         lastTexTime=now;
     }
     
-    updateGyro();
+    // Smooth orientation (gyro already integrated in event handler)
     pitch+=(tPitch-pitch)*CAM_SMOOTH;
     yaw+=(tYaw-yaw)*CAM_SMOOTH;
-    roll+=(tRoll-roll)*TILT_SMOOTH;
+    roll+=(tRoll-roll)*0.05;
     
+    // Hand tracking — every frame, no throttle
     updateHandState();
-    handUpdateTimer+=dt;
-    if(handUpdateTimer>0.033){
-        handUpdateTimer=0;
-        buildCombinedHandTexture();
-    }
+    buildCombinedHandTexture();
     
     checkGaze(dt);
     if(gazeHit)buildGazeTexture(gazeProg);
     if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
+    if(needPrefsRebuild){buildPrefsButton();needPrefsRebuild=false}
+    if(needSettingsRebuild){buildSettingsPanel();needSettingsRebuild=false}
     
-    const cw=canvas.clientWidth*devicePixelRatio,ch=canvas.clientHeight*devicePixelRatio;
+    const os=vrSettings.oversample;
+    const cw=Math.floor(canvas.clientWidth*devicePixelRatio*os);
+    const ch=Math.floor(canvas.clientHeight*devicePixelRatio*os);
     if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
     
     renderFrame();
