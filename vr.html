@@ -46,12 +46,11 @@ const PANO_URL='https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60f
 const CACHE_KEY='vr-pano-v6';
 const GAZE_DUR=2.0;
 
-/* Adjustable VR settings */
 let vrSettings={
-    fov: 80,        // degrees
-    ipd: 62,        // mm
-    screenDist: 40, // mm (not used in rendering but stored)
-    oversample: 1.0 // multiplier
+    fov: 80,
+    ipd: 62,
+    screenDist: 40,
+    oversample: 1.0
 };
 
 const CAM_SMOOTH=0.12;
@@ -69,16 +68,27 @@ let gl,canvas;
 let panoTexture=null;
 let loadDone=false,loadStarted=false;
 
-/* ═══════════════════════════════════════════
-   PURE GYROSCOPE ORIENTATION
-   We integrate angular velocity from gyroscope only.
-   No accelerometer, no magnetometer, no compass.
-   This is what WebXR does internally.
-   ═══════════════════════════════════════════ */
 let pitch=0,yaw=0,roll=0;
 let tPitch=0,tYaw=0,tRoll=0;
 let gyroReady=false;
 let lastGyroTime=0;
+
+/* Detect landscape orientation type */
+let landscapeType='primary'; // 'primary' = CCW rotation, 'secondary' = CW rotation
+
+function detectLandscapeType(){
+    const orient=screen.orientation||screen.mozOrientation||screen.msOrientation;
+    if(orient&&orient.type){
+        if(orient.type.indexOf('secondary')!==-1) landscapeType='secondary';
+        else landscapeType='primary';
+    }else{
+        // fallback: use window.orientation
+        if(typeof window.orientation!=='undefined'){
+            if(window.orientation===90) landscapeType='primary';
+            else if(window.orientation===-90) landscapeType='secondary';
+        }
+    }
+}
 
 let dragging=false,dragSX=0,dragSY=0,dragYaw0=0,dragPitch0=0;
 let gazeHit=null,gazeTimer=0,gazeProg=0;
@@ -96,7 +106,6 @@ let texCloseBtn=null;
 let texSettingsPanel=null;
 let texPrefsBtn=null;
 
-/* Hand tracking */
 let camVideo=null;
 let camReady=false;
 let handTrackingReady=false;
@@ -112,7 +121,6 @@ let hoverStates={};
 APP_ICONS.forEach(a=>{hoverStates[a.id]={hover:false,prog:0}});
 hoverStates['prefs']={hover:false,prog:0};
 hoverStates['close']={hover:false,prog:0};
-// Settings slider buttons
 ['fov_dec','fov_inc','ipd_dec','ipd_inc','dist_dec','dist_inc','os_dec','os_inc','settings_close'].forEach(k=>{
     hoverStates[k]={hover:false,prog:0};
 });
@@ -124,6 +132,7 @@ let needPrefsRebuild=false;
 function lockLS(){try{screen.orientation.lock('landscape-primary').catch(()=>{})}catch(e){}}
 function isLS(){return innerWidth>innerHeight}
 function checkOrient(){
+    detectLandscapeType();
     const el=document.getElementById('rotate-screen');
     if(isLS()){el.style.opacity='0';setTimeout(()=>{el.style.display='none';beginLoad()},550)}
     else{el.style.display='flex';el.style.opacity='1'}
@@ -270,10 +279,28 @@ function updateHandState(){
 
 /* ═══════════════════════════════════════════
    PURE GYROSCOPE — Integration of angular velocity
-   This is exactly what WebXR does:
-   - Listen to 'devicemotion' for rotationRate (gyroscope)
-   - Integrate angular velocity over time to get orientation
-   - No accelerometer, no magnetometer
+   
+   In LANDSCAPE-PRIMARY the phone is rotated 90° CCW from portrait.
+   The device axes in landscape are remapped:
+   
+   Device physical axes (portrait):
+     X = right, Y = up, Z = out of screen
+   
+   rotationRate gives angular velocity around device axes:
+     alpha = around Z (yaw in portrait)
+     beta  = around X (pitch in portrait)  
+     gamma = around Y (roll in portrait)
+   
+   In landscape-primary (device rotated 90° CCW):
+     Screen horizontal = device Y axis
+     Screen vertical   = device X axis (inverted)
+     
+   So for VR in landscape:
+     Looking left/right (yaw)  = rotation around device X = beta
+     Looking up/down (pitch)   = rotation around device Y = gamma  
+     Head tilt (roll)          = rotation around device Z = alpha
+   
+   Also: "move left → scene moves right" means we NEGATE yaw.
    ═══════════════════════════════════════════ */
 
 function handleGyroMotion(e){
@@ -286,44 +313,32 @@ function handleGyroMotion(e){
     const dtS=(now-lastGyroTime)/1000;
     lastGyroTime=now;
     
-    if(dtS>0.2)return; // skip large gaps
+    if(dtS>0.2)return;
     
     const D=Math.PI/180;
     
-    // rotationRate gives degrees/second:
-    // alpha = rotation around Z axis (device face normal)
-    // beta  = rotation around X axis (left-right axis)  
-    // gamma = rotation around Y axis (top-bottom axis)
-    
-    // In LANDSCAPE orientation (phone rotated 90° CW):
-    // Phone's X axis → screen horizontal → world horizontal
-    // Phone's Y axis → screen vertical → world vertical
-    // But axes are remapped:
-    //   Landscape yaw (looking left/right) = gyro alpha (Z rotation)
-    //   Landscape pitch (looking up/down) = gyro gamma (Y rotation) 
-    //   Landscape roll (head tilt) = gyro beta (X rotation)
-    
-    const gyroAlpha=rr.alpha*D; // deg/s → rad/s around Z
+    // Raw gyro in deg/s → rad/s
+    const gyroAlpha=rr.alpha*D; // around Z
     const gyroBeta=rr.beta*D;   // around X
     const gyroGamma=rr.gamma*D; // around Y
     
-    // Integrate angular velocity
-    // In landscape-primary (rotated 90° CCW from portrait):
-    // The device axes are swapped relative to the screen
+    // Determine sign flip based on landscape orientation
+    // landscape-primary: phone rotated CCW (home button on right)
+    // landscape-secondary: phone rotated CW (home button on left)
+    detectLandscapeType();
+    const flip=(landscapeType==='secondary')?-1:1;
     
-    // Yaw: turning the phone left/right around the vertical axis
-    //   In landscape, this is primarily gyro alpha (Z-axis rotation)
-    tYaw += gyroAlpha * dtS;
+    // In landscape-primary (CCW rotation from portrait):
+    //   Yaw (looking left/right) = device beta (X-axis rotation)
+    //     Negated so: move phone left → scene moves right
+    //   Pitch (looking up/down) = device gamma (Y-axis rotation)
+    //   Roll (head tilt) = device alpha (Z-axis rotation)
     
-    // Pitch: tilting phone up/down  
-    //   In landscape, this maps to gyro gamma
-    tPitch += gyroGamma * dtS;
+    tYaw   -= gyroBeta * dtS * flip;    // negated for correct direction
+    tPitch += gyroGamma * dtS * flip;   // up/down
+    tRoll  += gyroAlpha * dtS * 0.3 * flip; // head tilt, damped
     
-    // Roll: tilting head sideways
-    //   In landscape, this maps to gyro beta
-    tRoll -= gyroBeta * dtS * 0.3;
-    
-    // Clamp pitch
+    // Clamp
     tPitch=Math.max(-Math.PI*0.45,Math.min(Math.PI*0.45,tPitch));
     tRoll=Math.max(-0.5,Math.min(0.5,tRoll));
     
@@ -343,7 +358,7 @@ function reqGyroPermission(){
 }
 
 function initVR(img){
-    lockLS();
+    lockLS();detectLandscapeType();
     document.getElementById('vr-wrap').style.display='block';
     canvas=document.getElementById('glc');
     resizeCanvas();
@@ -398,10 +413,19 @@ function viewMatrix(){let m=I();m=rZ(m,roll);m=rX(m,pitch);m=rY(m,yaw);return m}
 
 function initTouch(){
     canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging=true;dragSX=e.touches[0].clientX;dragSY=e.touches[0].clientY;dragYaw0=tYaw;dragPitch0=tPitch}e.preventDefault()},{passive:false});
-    canvas.addEventListener('touchmove',e=>{if(dragging&&!gyroReady&&e.touches.length===1){tYaw=dragYaw0+(e.touches[0].clientX-dragSX)*0.004;tPitch=dragPitch0+(e.touches[0].clientY-dragSY)*0.004;tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch))}e.preventDefault()},{passive:false});
+    canvas.addEventListener('touchmove',e=>{if(dragging&&!gyroReady&&e.touches.length===1){
+        // Touch drag: move left → scene moves right (negate X)
+        tYaw=dragYaw0-(e.touches[0].clientX-dragSX)*0.004;
+        tPitch=dragPitch0+(e.touches[0].clientY-dragSY)*0.004;
+        tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+    }e.preventDefault()},{passive:false});
     canvas.addEventListener('touchend',()=>{dragging=false});
     canvas.addEventListener('mousedown',e=>{dragging=true;dragSX=e.clientX;dragSY=e.clientY;dragYaw0=tYaw;dragPitch0=tPitch});
-    window.addEventListener('mousemove',e=>{if(dragging&&!gyroReady){tYaw=dragYaw0+(e.clientX-dragSX)*0.004;tPitch=dragPitch0+(e.clientY-dragSY)*0.004;tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch))}});
+    window.addEventListener('mousemove',e=>{if(dragging&&!gyroReady){
+        tYaw=dragYaw0-(e.clientX-dragSX)*0.004;
+        tPitch=dragPitch0+(e.clientY-dragSY)*0.004;
+        tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+    }});
     window.addEventListener('mouseup',()=>{dragging=false});
 }
 
@@ -419,7 +443,6 @@ function updateCardTexture(){
     x.fillStyle=g;x.fillRect(0,0,512,200);
     x.fillStyle='#fff';x.textAlign='center';x.font="bold 56px 'Inter',sans-serif";x.fillText(ts,256,88);
     x.fillStyle='rgba(255,255,255,0.65)';x.font="18px 'Inter',sans-serif";x.fillText(ds,256,140);
-    // Hand tracking status
     const htStatus=handTrackingReady?(leftHandLandmarks||rightHandLandmarks?'🤚 Hands Detected':'✋ Hands Ready'):'⏳ No Hands';
     x.fillStyle='rgba(255,255,255,0.35)';x.font="12px 'Inter',sans-serif";x.fillText(htStatus,256,175);
     if(texCard)gl.deleteTexture(texCard);texCard=mkTex(c);
@@ -458,16 +481,10 @@ function buildPrefsButton(){
 
 function buildSettingsPanel(){
     const c=document.createElement('canvas');c.width=600;c.height=500;const x=c.getContext('2d');
-    
-    // Background
     x.fillStyle='rgba(8,8,35,0.95)';rRect(x,0,0,600,500,24);x.fill();
     x.strokeStyle='rgba(100,180,255,0.2)';x.lineWidth=1.5;rRect(x,0,0,600,500,24);x.stroke();
-    
-    // Title bar
     x.fillStyle='rgba(255,255,255,0.04)';x.fillRect(0,0,600,52);
     x.fillStyle='#fff';x.font="700 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('VR Settings',300,35);
-    
-    // Close X button area (top right)
     const closeHs=hoverStates['settings_close'];
     const closeHp=closeHs?closeHs.prog:0;
     x.fillStyle=`rgba(255,60,60,${0.3+closeHp*0.5})`;
@@ -475,28 +492,19 @@ function buildSettingsPanel(){
     x.strokeStyle='#fff';x.lineWidth=2.5;x.lineCap='round';
     x.beginPath();x.moveTo(552,18);x.lineTo(568,34);x.stroke();
     x.beginPath();x.moveTo(568,18);x.lineTo(552,34);x.stroke();
-    
-    // Settings items
     const settings=[
         {label:'Lens Field of View',key:'fov',val:vrSettings.fov,unit:'°',min:50,max:120,step:2},
         {label:'Inter Lens Distance',key:'ipd',val:vrSettings.ipd,unit:'mm',min:50,max:80,step:1},
         {label:'Screen to Lens Distance',key:'dist',val:vrSettings.screenDist,unit:'mm',min:20,max:80,step:1},
         {label:'Oversampling',key:'os',val:vrSettings.oversample,unit:'x',min:0.5,max:2.0,step:0.1},
     ];
-    
     settings.forEach((s,i)=>{
         const y0=80+i*100;
-        
-        // Label
         x.fillStyle='rgba(255,255,255,0.75)';x.font="500 16px 'Inter',sans-serif";x.textAlign='left';
         x.fillText(s.label,40,y0+20);
-        
-        // Value
         x.fillStyle='rgba(0,200,255,0.9)';x.font="700 18px 'Inter',sans-serif";x.textAlign='right';
         const valStr=s.key==='os'?s.val.toFixed(1):Math.round(s.val).toString();
         x.fillText(valStr+s.unit,560,y0+20);
-        
-        // < button
         const decHs=hoverStates[s.key+'_dec'];
         const decHp=decHs?decHs.prog:0;
         x.fillStyle=`rgba(255,255,255,${0.08+decHp*0.15})`;
@@ -505,21 +513,13 @@ function buildSettingsPanel(){
         x.lineWidth=1;rRect(x,40,y0+35,50,35,10);x.stroke();
         x.fillStyle=`rgba(255,255,255,${0.7+decHp*0.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';
         x.fillText('<',65,y0+58);
-        
-        // Slider track
         const sliderX=110,sliderW=370,sliderY=y0+52;
         x.fillStyle='rgba(255,255,255,0.1)';rRect(x,sliderX,sliderY-3,sliderW,6,3);x.fill();
-        
-        // Slider fill
         const pct=(s.val-s.min)/(s.max-s.min);
         x.fillStyle='rgba(0,160,255,0.5)';rRect(x,sliderX,sliderY-3,sliderW*pct,6,3);x.fill();
-        
-        // Slider thumb
         const thumbX=sliderX+sliderW*pct;
         x.fillStyle='rgba(0,200,255,0.9)';x.beginPath();x.arc(thumbX,sliderY,10,0,Math.PI*2);x.fill();
         x.fillStyle='#fff';x.beginPath();x.arc(thumbX,sliderY,5,0,Math.PI*2);x.fill();
-        
-        // > button
         const incHs=hoverStates[s.key+'_inc'];
         const incHp=incHs?incHs.prog:0;
         x.fillStyle=`rgba(255,255,255,${0.08+incHp*0.15})`;
@@ -529,7 +529,6 @@ function buildSettingsPanel(){
         x.fillStyle=`rgba(255,255,255,${0.7+incHp*0.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';
         x.fillText('>',525,y0+58);
     });
-    
     if(texSettingsPanel)gl.deleteTexture(texSettingsPanel);
     texSettingsPanel=mkTex(c);
 }
@@ -545,23 +544,17 @@ function buildCrosshairTexture(){
 
 function buildGazeTexture(prog){
     const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
-    // Outer ring background
     x.strokeStyle='rgba(255,255,255,0.15)';x.lineWidth=5;x.beginPath();x.arc(64,64,32,0,Math.PI*2);x.stroke();
-    // Fill arc
     if(prog>0){
         x.strokeStyle='rgba(0,200,255,0.95)';x.lineWidth=5;x.lineCap='round';
         x.beginPath();x.arc(64,64,32,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);x.stroke();
-        // Glow
         x.shadowColor='rgba(0,200,255,0.6)';x.shadowBlur=12;
         x.strokeStyle='rgba(0,200,255,0.4)';x.lineWidth=8;
         x.beginPath();x.arc(64,64,32,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);x.stroke();
         x.shadowBlur=0;
-        // Inner fill
         x.fillStyle=`rgba(0,200,255,${prog*0.15})`;x.beginPath();x.arc(64,64,28,0,Math.PI*2);x.fill();
     }
-    // Center dot
     x.fillStyle=`rgba(255,255,255,${0.7+prog*0.3})`;x.beginPath();x.arc(64,64,3.5,0,Math.PI*2);x.fill();
-    // Crosshair lines
     x.strokeStyle=`rgba(255,255,255,${0.5+prog*0.3})`;x.lineWidth=1.5;
     [[64,26,64,42],[64,86,64,102],[26,64,42,64],[86,64,102,64]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
     if(texGazeRing)gl.deleteTexture(texGazeRing);texGazeRing=mkTex(c);
@@ -594,7 +587,6 @@ function updateCameraTexture(){
     texCamView=mkTex(c);
 }
 
-/* Hand skeleton overlay */
 const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 const FINGER_COLORS=['#ff4466','#ffaa00','#44ff66','#4488ff','#cc44ff'];
 
@@ -605,7 +597,6 @@ function buildCombinedHandTexture(){
     }
     const c=document.createElement('canvas');c.width=512;c.height=512;const x=c.getContext('2d');
     x.clearRect(0,0,512,512);
-    
     function drawHand(landmarks){
         if(!landmarks)return;
         HAND_CONNECTIONS.forEach(([a,b])=>{
@@ -641,15 +632,12 @@ function buildCombinedHandTexture(){
             x.beginPath();x.arc(tip.x*512,tip.y*512,7,0,Math.PI*2);x.stroke();
         });
     }
-    
     drawHand(leftHandLandmarks);
     drawHand(rightHandLandmarks);
-    
     if(handTexCombined)gl.deleteTexture(handTexCombined);
     handTexCombined=mkTex(c);
 }
 
-/* World-space interactive element positions */
 function getAppPositions(){
     const startX=-3.75,spacing=1.5;
     return APP_ICONS.map((a,i)=>({...a,pos:[startX+i*spacing,-1.0,-5],w:1.0,h:1.0,idx:i}));
@@ -661,30 +649,21 @@ function getSettingsClosePos(){return{pos:[2.15,1.5,-5],w:0.45,h:0.45}}
 function getClosePos(){return{pos:[0,3.0,-5],w:0.65,h:0.65}}
 
 function getSettingsButtonPositions(){
-    // Matches the settings panel layout
-    // Panel is 5.0 wide, 4.2 tall at [0,-0.5,-5]
-    // Panel canvas is 600x500, mapped to 5.0x4.2
-    // Each setting row: y0 = 80 + i*100 in canvas coords
-    // < button at canvas (40, y0+35, 50, 35) → world coords
-    // > button at canvas (500, y0+35, 50, 35)
     const pW=5.0,pH=4.2,pX=0,pY=-0.5,pZ=-5;
     const cW=600,cH=500;
     const keys=['fov','ipd','dist','os'];
     const results=[];
     keys.forEach((k,i)=>{
         const cy0=80+i*100;
-        // < button: canvas center (65, cy0+52)
         const decCX=65,decCY=cy0+52;
         const decWX=pX+(decCX/cW-0.5)*pW;
         const decWY=pY+(0.5-decCY/cH)*pH;
         results.push({id:k+'_dec',pos:[decWX,decWY,pZ],w:0.42,h:0.3});
-        // > button: canvas center (525, cy0+52)
         const incCX=525,incCY=cy0+52;
         const incWX=pX+(incCX/cW-0.5)*pW;
         const incWY=pY+(0.5-incCY/cH)*pH;
         results.push({id:k+'_inc',pos:[incWX,incWY,pZ],w:0.42,h:0.3});
     });
-    // Close button
     const scPos=getSettingsClosePos();
     results.push({id:'settings_close',pos:scPos.pos,w:scPos.w,h:scPos.h});
     return results;
@@ -743,10 +722,7 @@ function triggerAction(id){
 function checkGaze(dt){
     const dir=gazeDir();
     let hit=null;
-    
-    // Build list of all interactive elements
     let interactables=[];
-    
     if(cameraAppOpen){
         interactables.push({id:'close',...getClosePos()});
     }else if(settingsOpen){
@@ -757,13 +733,9 @@ function checkGaze(dt){
         const pp=getPrefsPos();
         interactables.push({id:'prefs',pos:pp.pos,w:pp.w,h:pp.h});
     }
-    
-    // Test gaze against all interactables
     for(const item of interactables){
         if(hitQuad(dir,item.pos,item.w,item.h)){hit=item.id;break}
     }
-    
-    // Test pinch clicks
     if(pinchClickLeft||pinchClickRight){
         const pt=pinchClickLeft?leftPinchPoint:rightPinchPoint;
         for(const item of interactables){
@@ -777,8 +749,6 @@ function checkGaze(dt){
             }
         }
     }
-    
-    // Update hover states for all known keys
     let anyChanged=false;
     Object.keys(hoverStates).forEach(key=>{
         const hs=hoverStates[key];
@@ -791,11 +761,8 @@ function checkGaze(dt){
         needAppRebuild=true;
         needPrefsRebuild=true;
         needSettingsRebuild=true;
-        // Rebuild close button if hovering
         if(cameraAppOpen)buildCloseTexture();
     }
-    
-    // Gaze timer for activation
     if(hit){
         if(gazeHit===hit){
             gazeTimer+=dt;gazeProg=Math.min(gazeTimer/GAZE_DUR,1.0);
@@ -826,7 +793,6 @@ function drawTexQuad(proj,view,pos,w,h,tex){
 }
 
 function renderEye(proj,view){
-    // Panorama sphere
     gl.useProgram(progPano);gl.disable(gl.DEPTH_TEST);
     const aP=gl.getAttribLocation(progPano,'aP'),aT=gl.getAttribLocation(progPano,'aT');
     gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);
@@ -839,46 +805,31 @@ function renderEye(proj,view){
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphereIBO);
     gl.drawElements(gl.TRIANGLES,sphereCount,gl.UNSIGNED_SHORT,0);
     gl.disableVertexAttribArray(aT);gl.enable(gl.DEPTH_TEST);
-    
-    // Time card (always visible above)
     drawTexQuad(proj,view,[0,2.2,-5],4,1.8,texCard);
-    
     if(cameraAppOpen){
         if(texCamView)drawTexQuad(proj,view,[0,0.5,-5],5,3.75,texCamView);
-        if(texCloseBtn)drawTexQuad(proj,view,...Object.values(getClosePos()),0.5,0.5,texCloseBtn);
-        // Fix: getClosePos returns {pos, w, h}
         const cp=getClosePos();
         drawTexQuad(proj,view,cp.pos,cp.w-0.15,cp.h-0.15,texCloseBtn);
     }else if(settingsOpen){
-        // Settings panel
         const sp=getSettingsPos();
         if(texSettingsPanel)drawTexQuad(proj,view,sp.pos,sp.w,sp.h,texSettingsPanel);
     }else{
-        // App icons
         const apps=getAppPositions();
         apps.forEach((a,i)=>{if(texAppBGs[i])drawTexQuad(proj,view,a.pos,a.w,a.h,texAppBGs[i])});
-        // Preferences button
         const pp=getPrefsPos();
         if(texPrefsBtn)drawTexQuad(proj,view,pp.pos,pp.w,pp.h,texPrefsBtn);
     }
-    
-    // HUD layer (crosshair + hands) rendered at fixed screen position
     gl.disable(gl.DEPTH_TEST);
     const fovRad=vrSettings.fov*Math.PI/180;
     const asp2=(canvas.width/2)/canvas.height;
     const cP=persp(fovRad,asp2,0.01,100);
     const cV=I();
-    
-    // Hands overlay — rendered at crosshair depth, filling lower portion
     if(handTexCombined){
         drawTexQuad(cP,cV,[0,-0.15,-1.5],1.2,1.2,handTexCombined);
     }
-    
-    // Crosshair / gaze ring
     const crossTex=gazeHit?texGazeRing:texCrosshair;
     const crossSize=gazeHit?0.18:0.1;
     drawTexQuad(cP,cV,[0,0,-1.5],crossSize,crossSize,crossTex);
-    
     gl.enable(gl.DEPTH_TEST);
 }
 
@@ -895,39 +846,30 @@ function renderFrame(){
 function mainLoop(now){
     requestAnimationFrame(mainLoop);
     const dt=Math.min((now-prevTime)/1000,0.1);prevTime=now;
-    
     if(!texReady){
         updateCardTexture();buildAppCardTextures();buildCrosshairTexture();
         buildGazeTexture(0);buildCloseTexture();buildPrefsButton();buildSettingsPanel();
         texReady=true;
     }
-    
     if(now-lastTexTime>400){
         updateCardTexture();
         if(cameraAppOpen)updateCameraTexture();
         lastTexTime=now;
     }
-    
-    // Smooth orientation (gyro already integrated in event handler)
     pitch+=(tPitch-pitch)*CAM_SMOOTH;
     yaw+=(tYaw-yaw)*CAM_SMOOTH;
     roll+=(tRoll-roll)*0.05;
-    
-    // Hand tracking — every frame, no throttle
     updateHandState();
     buildCombinedHandTexture();
-    
     checkGaze(dt);
     if(gazeHit)buildGazeTexture(gazeProg);
     if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
     if(needPrefsRebuild){buildPrefsButton();needPrefsRebuild=false}
     if(needSettingsRebuild){buildSettingsPanel();needSettingsRebuild=false}
-    
     const os=vrSettings.oversample;
     const cw=Math.floor(canvas.clientWidth*devicePixelRatio*os);
     const ch=Math.floor(canvas.clientHeight*devicePixelRatio*os);
     if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
-    
     renderFrame();
 }
 
