@@ -3,6 +3,7 @@
 <head>
 
 <meta charset="UTF-8" />
+
 <meta
   name="viewport"
   content="
@@ -36,6 +37,7 @@ body{
 
   width:100%;
   height:100%;
+
   overflow:hidden;
 
   background:black;
@@ -45,7 +47,9 @@ body{
   touch-action:none;
 }
 
-/* FORCE LANDSCAPE */
+/* =========================
+   ROTATE MESSAGE
+========================= */
 
 @media screen and (orientation:portrait){
 
@@ -69,18 +73,18 @@ body{
 
     align-items:center;
 
+    text-align:center;
+
     font-size:2rem;
 
     font-weight:700;
-
-    text-align:center;
 
     padding:30px;
   }
 }
 
 /* =========================
-   LOADING
+   LOADING SCREEN
 ========================= */
 
 #loadingScreen{
@@ -99,7 +103,7 @@ body{
 
   z-index:9999;
 
-  transition:1.5s;
+  transition:1.2s;
 }
 
 .loading-text{
@@ -110,9 +114,7 @@ body{
 
   font-weight:700;
 
-  letter-spacing:1px;
-
-  animation:pulse 1.5s infinite;
+  animation:pulse 1.6s infinite;
 }
 
 @keyframes pulse{
@@ -148,18 +150,18 @@ body{
 
   align-items:center;
 
-  z-index:9000;
-
   padding:30px;
+
+  z-index:9000;
 
   transition:1s;
 }
 
 .shake-box{
 
-  color:white;
-
   text-align:center;
+
+  color:white;
 
   max-width:700px;
 
@@ -177,11 +179,11 @@ body{
 
 .shake-sub{
 
-  font-size:1.3rem;
+  font-size:1.2rem;
 
-  opacity:0.8;
+  opacity:0.75;
 
-  line-height:1.6;
+  line-height:1.7;
 }
 
 @keyframes floatText{
@@ -200,7 +202,7 @@ body{
 }
 
 /* =========================
-   VR
+   VR CONTAINER
 ========================= */
 
 #vrContainer{
@@ -214,7 +216,9 @@ body{
   background:black;
 }
 
-/* SPLIT SCREEN */
+/* =========================
+   SPLIT SCREEN
+========================= */
 
 .eye{
 
@@ -239,7 +243,9 @@ body{
   right:0;
 }
 
-/* 360 WORLD */
+/* =========================
+   360 WORLD
+========================= */
 
 .world{
 
@@ -254,7 +260,9 @@ body{
   background-image:url('https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png');
 
   background-size:cover;
+
   background-repeat:repeat-x;
+
   background-position:center;
 
   transform-origin:center center;
@@ -264,7 +272,9 @@ body{
   transition:transform 0.08s linear;
 }
 
-/* CROSSHAIR */
+/* =========================
+   CROSSHAIR
+========================= */
 
 .crosshair{
 
@@ -319,6 +329,10 @@ body{
   transform:translateY(-50%);
 }
 
+/* =========================
+   FADE
+========================= */
+
 .fade-out{
   opacity:0;
 }
@@ -368,7 +382,10 @@ body{
 
   <div class="eye left-eye">
 
-    <div class="world" id="leftWorld"></div>
+    <div
+      class="world"
+      id="leftWorld"
+    ></div>
 
     <div class="crosshair"></div>
 
@@ -378,7 +395,10 @@ body{
 
   <div class="eye right-eye">
 
-    <div class="world" id="rightWorld"></div>
+    <div
+      class="world"
+      id="rightWorld"
+    ></div>
 
     <div class="crosshair"></div>
 
@@ -389,7 +409,7 @@ body{
 <script>
 
 /* =========================
-   CHECK STORAGE
+   STORAGE CHECK
 ========================= */
 
 const userData =
@@ -404,11 +424,15 @@ if(!userData){
 }
 
 /* =========================
-   CACHE IMAGE
+   VR IMAGE
 ========================= */
 
 const vrImage =
-'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
+"https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png";
+
+/* =========================
+   CACHE
+========================= */
 
 caches.open("omni360-vr-cache")
 .then(cache=>{
@@ -445,14 +469,13 @@ img.onload = ()=>{
 
       startShakeScreen();
 
-    },1500);
+    },1200);
 
   },1000);
-
 };
 
 /* =========================
-   SHAKE DETECTION
+   SHAKE SCREEN
 ========================= */
 
 let shakeDetected = false;
@@ -494,15 +517,11 @@ function startShakeScreen(){
       lastY = acc.y;
       lastZ = acc.z;
 
-      /* WILD SHAKE */
-
       if(total > 30){
 
         shakeDetected = true;
 
-        enterVR(
-          
-        );
+        enterVR();
       }
 
     }
@@ -533,16 +552,17 @@ function enterVR(){
       "vrContainer"
     ).style.display = "block";
 
-    startGyroscope();
     enterFullscreen();
+
     keepScreenAwake();
 
+    startGyroscope();
 
   },1200);
 }
 
 /* =========================
-   GYRO
+   WORLDS
 ========================= */
 
 const leftWorld =
@@ -555,21 +575,29 @@ document.getElementById(
   "rightWorld"
 );
 
-/* SMOOTHED VALUES */
+/* =========================
+   SMOOTH ROTATION
+========================= */
 
 let smoothX = 0;
 let smoothY = 0;
 
+/* =========================
+   GYRO
+========================= */
+
 function startGyroscope(){
 
-  /* IOS */
-
   if(
+
     typeof DeviceOrientationEvent
-    !== "undefined" &&
+    !== "undefined"
+
+    &&
 
     typeof DeviceOrientationEvent
     .requestPermission === "function"
+
   ){
 
     DeviceOrientationEvent
@@ -609,15 +637,11 @@ function setupOrientation(){
       let gamma =
       event.gamma || 0;
 
-      /* COMPASS */
-
       let targetX =
       gamma * 3;
 
       let targetY =
       beta * 2;
-
-      /* STABILIZATION */
 
       smoothX +=
       (targetX - smoothX)
@@ -677,8 +701,10 @@ async function lockLandscape(){
   try{
 
     if(
+
       screen.orientation &&
       screen.orientation.lock
+
     ){
 
       await screen.orientation
@@ -690,15 +716,14 @@ async function lockLandscape(){
 
 lockLandscape();
 
-<script>
-
 /* =========================
    FULLSCREEN
 ========================= */
 
 async function enterFullscreen(){
 
-  const el = document.documentElement;
+  const el =
+  document.documentElement;
 
   try{
 
@@ -706,11 +731,15 @@ async function enterFullscreen(){
 
       await el.requestFullscreen();
 
-    }else if(el.webkitRequestFullscreen){
+    }else if(
+      el.webkitRequestFullscreen
+    ){
 
       await el.webkitRequestFullscreen();
 
-    }else if(el.msRequestFullscreen){
+    }else if(
+      el.msRequestFullscreen
+    ){
 
       await el.msRequestFullscreen();
     }
@@ -720,7 +749,9 @@ async function enterFullscreen(){
   }
 }
 
-/* MOBILE WAKE LOCK */
+/* =========================
+   KEEP SCREEN AWAKE
+========================= */
 
 async function keepScreenAwake(){
 
@@ -737,8 +768,6 @@ async function keepScreenAwake(){
     console.log(e);
   }
 }
-
-</script>
 
 </script>
 
