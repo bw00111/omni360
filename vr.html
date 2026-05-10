@@ -1,1 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
 
+<meta charset="UTF-8" />
+<meta
+  name="viewport"
+  content="
+    width=device-width,
+    initial-scale=1.0,
+    maximum-scale=1.0,
+    user-scalable=no
+  "
+/>
+
+<title>Omni360 VR</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+
+html,
+body{
+
+  width:100%;
+  height:100%;
+  overflow:hidden;
+
+  background:black;
+
+  font-family:'Inter',sans-serif;
+
+  touch-action:none;
+}
+
+/* FORCE LANDSCAPE */
+
+@media screen and (orientation:portrait){
+
+  body::before{
+
+    content:"Rotate Your Phone";
+
+    position:fixed;
+
+    inset:0;
+
+    background:black;
+
+    color:white;
+
+    z-index:999999;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-size:2rem;
+
+    font-weight:700;
+
+    text-align:center;
+
+    padding:30px;
+  }
+}
+
+/* =========================
+   LOADING
+========================= */
+
+#loadingScreen{
+
+  position:fixed;
+
+  inset:0;
+
+  background:black;
+
+  display:flex;
+
+  justify-content:center;
+
+  align-items:center;
+
+  z-index:9999;
+
+  transition:1.5s;
+}
+
+.loading-text{
+
+  color:white;
+
+  font-size:2rem;
+
+  font-weight:700;
+
+  letter-spacing:1px;
+
+  animation:pulse 1.5s infinite;
+}
+
+@keyframes pulse{
+
+  0%{
+    opacity:0.4;
+  }
+
+  50%{
+    opacity:1;
+  }
+
+  100%{
+    opacity:0.4;
+  }
+}
+
+/* =========================
+   SHAKE SCREEN
+========================= */
+
+#shakeScreen{
+
+  position:fixed;
+
+  inset:0;
+
+  background:black;
+
+  display:none;
+
+  justify-content:center;
+
+  align-items:center;
+
+  z-index:9000;
+
+  padding:30px;
+
+  transition:1s;
+}
+
+.shake-box{
+
+  color:white;
+
+  text-align:center;
+
+  max-width:700px;
+
+  animation:floatText 2s infinite ease-in-out;
+}
+
+.shake-title{
+
+  font-size:3rem;
+
+  font-weight:800;
+
+  margin-bottom:20px;
+}
+
+.shake-sub{
+
+  font-size:1.3rem;
+
+  opacity:0.8;
+
+  line-height:1.6;
+}
+
+@keyframes floatText{
+
+  0%{
+    transform:translateY(0px);
+  }
+
+  50%{
+    transform:translateY(-10px);
+  }
+
+  100%{
+    transform:translateY(0px);
+  }
+}
+
+/* =========================
+   VR
+========================= */
+
+#vrContainer{
+
+  position:fixed;
+
+  inset:0;
+
+  display:none;
+
+  background:black;
+}
+
+/* SPLIT SCREEN */
+
+.eye{
+
+  position:absolute;
+
+  top:0;
+
+  width:50%;
+
+  height:100%;
+
+  overflow:hidden;
+
+  background:black;
+}
+
+.left-eye{
+  left:0;
+}
+
+.right-eye{
+  right:0;
+}
+
+/* 360 WORLD */
+
+.world{
+
+  position:absolute;
+
+  width:300%;
+  height:300%;
+
+  left:-100%;
+  top:-100%;
+
+  background-image:url('https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png');
+
+  background-size:cover;
+  background-repeat:repeat-x;
+  background-position:center;
+
+  transform-origin:center center;
+
+  will-change:transform;
+
+  transition:transform 0.08s linear;
+}
+
+/* CROSSHAIR */
+
+.crosshair{
+
+  position:absolute;
+
+  width:18px;
+  height:18px;
+
+  border:2px solid white;
+
+  border-radius:50%;
+
+  left:50%;
+  top:50%;
+
+  transform:translate(-50%,-50%);
+
+  z-index:100;
+}
+
+.crosshair::after{
+
+  content:"";
+
+  position:absolute;
+
+  width:2px;
+  height:20px;
+
+  background:white;
+
+  left:50%;
+  top:-10px;
+
+  transform:translateX(-50%);
+}
+
+.crosshair::before{
+
+  content:"";
+
+  position:absolute;
+
+  width:20px;
+  height:2px;
+
+  background:white;
+
+  top:50%;
+  left:-10px;
+
+  transform:translateY(-50%);
+}
+
+.fade-out{
+  opacity:0;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- LOADING -->
+
+<div id="loadingScreen">
+
+  <div class="loading-text">
+    Loading VR
+  </div>
+
+</div>
+
+<!-- SHAKE -->
+
+<div id="shakeScreen">
+
+  <div class="shake-box">
+
+    <div class="shake-title">
+      Place Your Phone<br>
+      Inside The VR Box
+    </div>
+
+    <div class="shake-sub">
+
+      Put it on your head and shake your head
+      to enter VR mode.
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- VR -->
+
+<div id="vrContainer">
+
+  <!-- LEFT -->
+
+  <div class="eye left-eye">
+
+    <div class="world" id="leftWorld"></div>
+
+    <div class="crosshair"></div>
+
+  </div>
+
+  <!-- RIGHT -->
+
+  <div class="eye right-eye">
+
+    <div class="world" id="rightWorld"></div>
+
+    <div class="crosshair"></div>
+
+  </div>
+
+</div>
+
+<script>
+
+/* =========================
+   CHECK STORAGE
+========================= */
+
+const userData =
+localStorage.getItem(
+  "omni360UserData"
+);
+
+if(!userData){
+
+  window.location.href =
+  "index.html";
+}
+
+/* =========================
+   CACHE IMAGE
+========================= */
+
+const vrImage =
+'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
+
+caches.open("omni360-vr-cache")
+.then(cache=>{
+
+  cache.add(vrImage);
+
+});
+
+/* =========================
+   LOAD IMAGE
+========================= */
+
+const img = new Image();
+
+img.src = vrImage;
+
+img.onload = ()=>{
+
+  setTimeout(()=>{
+
+    const loading =
+    document.getElementById(
+      "loadingScreen"
+    );
+
+    loading.classList.add(
+      "fade-out"
+    );
+
+    setTimeout(()=>{
+
+      loading.style.display =
+      "none";
+
+      startShakeScreen();
+
+    },1500);
+
+  },1000);
+
+};
+
+/* =========================
+   SHAKE DETECTION
+========================= */
+
+let shakeDetected = false;
+
+function startShakeScreen(){
+
+  document.getElementById(
+    "shakeScreen"
+  ).style.display = "flex";
+
+  let lastX = 0;
+  let lastY = 0;
+  let lastZ = 0;
+
+  window.addEventListener(
+    "devicemotion",
+    (event)=>{
+
+      if(shakeDetected) return;
+
+      const acc =
+      event.accelerationIncludingGravity;
+
+      if(!acc) return;
+
+      const deltaX =
+      Math.abs(acc.x - lastX);
+
+      const deltaY =
+      Math.abs(acc.y - lastY);
+
+      const deltaZ =
+      Math.abs(acc.z - lastZ);
+
+      const total =
+      deltaX + deltaY + deltaZ;
+
+      lastX = acc.x;
+      lastY = acc.y;
+      lastZ = acc.z;
+
+      /* WILD SHAKE */
+
+      if(total > 30){
+
+        shakeDetected = true;
+
+        enterVR();
+      }
+
+    }
+  );
+}
+
+/* =========================
+   ENTER VR
+========================= */
+
+function enterVR(){
+
+  const shakeScreen =
+  document.getElementById(
+    "shakeScreen"
+  );
+
+  shakeScreen.classList.add(
+    "fade-out"
+  );
+
+  setTimeout(()=>{
+
+    shakeScreen.style.display =
+    "none";
+
+    document.getElementById(
+      "vrContainer"
+    ).style.display = "block";
+
+    startGyroscope();
+
+  },1200);
+}
+
+/* =========================
+   GYRO
+========================= */
+
+const leftWorld =
+document.getElementById(
+  "leftWorld"
+);
+
+const rightWorld =
+document.getElementById(
+  "rightWorld"
+);
+
+/* SMOOTHED VALUES */
+
+let smoothX = 0;
+let smoothY = 0;
+
+function startGyroscope(){
+
+  /* IOS */
+
+  if(
+    typeof DeviceOrientationEvent
+    !== "undefined" &&
+
+    typeof DeviceOrientationEvent
+    .requestPermission === "function"
+  ){
+
+    DeviceOrientationEvent
+    .requestPermission()
+    .then(permission=>{
+
+      if(permission === "granted"){
+
+        setupOrientation();
+      }
+
+    })
+    .catch(console.error);
+
+  }else{
+
+    setupOrientation();
+  }
+}
+
+/* =========================
+   SENSOR
+========================= */
+
+function setupOrientation(){
+
+  window.addEventListener(
+    "deviceorientation",
+    (event)=>{
+
+      let alpha =
+      event.alpha || 0;
+
+      let beta =
+      event.beta || 0;
+
+      let gamma =
+      event.gamma || 0;
+
+      /* COMPASS */
+
+      let targetX =
+      gamma * 3;
+
+      let targetY =
+      beta * 2;
+
+      /* STABILIZATION */
+
+      smoothX +=
+      (targetX - smoothX)
+      * 0.08;
+
+      smoothY +=
+      (targetY - smoothY)
+      * 0.08;
+
+      renderVR(
+        smoothX,
+        smoothY,
+        alpha
+      );
+
+    },
+    true
+  );
+}
+
+/* =========================
+   RENDER
+========================= */
+
+function renderVR(x,y,compass){
+
+  const rotateX =
+  -y;
+
+  const rotateY =
+  -x;
+
+  const panoramaOffset =
+  compass * 2;
+
+  const transform = `
+
+    rotateX(${rotateX}deg)
+    rotateY(${rotateY}deg)
+    translateX(${panoramaOffset}px)
+
+  `;
+
+  leftWorld.style.transform =
+  transform;
+
+  rightWorld.style.transform =
+  transform;
+}
+
+/* =========================
+   LANDSCAPE LOCK
+========================= */
+
+async function lockLandscape(){
+
+  try{
+
+    if(
+      screen.orientation &&
+      screen.orientation.lock
+    ){
+
+      await screen.orientation
+      .lock("landscape");
+    }
+
+  }catch(e){}
+}
+
+lockLandscape();
+
+</script>
+
+</body>
+</html>
