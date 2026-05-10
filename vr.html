@@ -7,7 +7,6 @@
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
-
         #rotate-screen{position:fixed;inset:0;z-index:99999;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s}
         .phone-box{width:56px;height:96px;border:2.5px solid rgba(255,255,255,.65);border-radius:13px;position:relative;animation:rotP 2.8s ease-in-out infinite;margin-bottom:22px}
         .phone-box::before{content:'';position:absolute;top:5px;left:50%;transform:translateX(-50%);width:16px;height:2.5px;background:rgba(255,255,255,.35);border-radius:2px}
@@ -15,7 +14,6 @@
         @keyframes rotP{0%,18%{transform:rotate(0)}38%,68%{transform:rotate(90deg)}88%,100%{transform:rotate(0)}}
         #rotate-screen p{font-size:17px;font-weight:300;letter-spacing:.4px;opacity:.8}
         #rotate-screen .sub{font-size:12px;opacity:.4;margin-top:8px}
-
         #loading-screen{position:fixed;inset:0;z-index:9998;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:none;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s}
         .goggles{position:relative;width:96px;height:48px;margin-bottom:26px}
         .lens{position:absolute;width:38px;height:38px;border:2.5px solid rgba(255,255,255,.2);border-radius:50%;top:5px}
@@ -28,965 +26,632 @@
         .bar-bg{width:200px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}
         .bar-fg{height:100%;width:0;background:linear-gradient(90deg,#00b4ff,#6a30ff);border-radius:2px;transition:width .2s}
         .ld-pct{font-size:11px;opacity:.35;margin-top:10px;letter-spacing:1px}
-
+        .ld-sub{font-size:10px;opacity:.25;margin-top:6px;letter-spacing:.5px}
         #vr-wrap{position:fixed;inset:0;z-index:100;display:none}
         #glc{width:100%;height:100%;display:block}
+        #cam{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.001;z-index:-1;transform:scaleX(-1)}
     </style>
 </head>
 <body>
 <div id="rotate-screen"><div class="phone-box"></div><p>Rotate your phone to landscape</p><div class="sub">Then tap anywhere to start</div></div>
-<div id="loading-screen"><div class="goggles"><div class="lens"></div><div class="lens"></div></div><div class="ld-label">LOADING VR</div><div class="bar-bg"><div class="bar-fg" id="bar-fg"></div></div><div class="ld-pct" id="ld-pct">0%</div></div>
+<div id="loading-screen"><div class="goggles"><div class="lens"></div><div class="lens"></div></div><div class="ld-label">LOADING VR</div><div class="bar-bg"><div class="bar-fg" id="bar-fg"></div></div><div class="ld-pct" id="ld-pct">0%</div><div class="ld-sub" id="ld-sub"></div></div>
 <div id="vr-wrap"><canvas id="glc"></canvas></div>
+<video id="cam" playsinline autoplay muted></video>
 
 <script>
 "use strict";
 
-const PANO_URL = 'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
-const CACHE_KEY = 'vr-pano-v3';
-const GAZE_DUR = 2.0;
-const CAM_SMOOTH = 0.08;
-const TILT_SMOOTH = 0.06;
-const FOV = Math.PI * 0.48;
-const IPD = 0.062;
+const PANO_URL='https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
+const CACHE_KEY='vr-pano-v4';
+const GAZE_DUR=2.0;
+const CAM_SMOOTH=0.07;
+const TILT_SMOOTH=0.05;
+const FOV=Math.PI*0.48;
+const IPD=0.062;
 
-const APP_ICONS = [
-    { name:'Clock',    url:'https://i.ibb.co/fdmh5byd/vr.png',       id:'clock' },
-    { name:'Camera',   url:'https://i.ibb.co/1fFjzT3p/camera.png',   id:'camera' },
-    { name:'Gallery',  url:'https://i.ibb.co/7Nd41XyX/gallery.png',  id:'gallery' },
-    { name:'AI',       url:'https://i.ibb.co/N62BHcnc/ai.png',       id:'ai' },
-    { name:'Reader',   url:'https://i.ibb.co/KxqC6ZR5/reading.png',  id:'reader' },
-    { name:'Settings', url:'https://i.ibb.co/3Y9DYF4J/settings.png', id:'settings' },
+const APP_ICONS=[
+    {name:'VR',url:'https://i.ibb.co/fdmh5byd/vr.png',id:'vr'},
+    {name:'Camera',url:'https://i.ibb.co/1fFjzT3p/camera.png',id:'camera'},
+    {name:'Gallery',url:'https://i.ibb.co/7Nd41XyX/gallery.png',id:'gallery'},
+    {name:'AI',url:'https://i.ibb.co/N62BHcnc/ai.png',id:'ai'},
+    {name:'Reader',url:'https://i.ibb.co/KxqC6ZR5/reading.png',id:'reader'},
+    {name:'Settings',url:'https://i.ibb.co/3Y9DYF4J/settings.png',id:'settings'},
 ];
 
-let gl, canvas;
-let panoTexture = null;
-let loadDone = false, loadStarted = false;
-
-let pitch = 0, yaw = 0, roll = 0;
-let tPitch = 0, tYaw = 0, tRoll = 0;
-
-let gyroReady = false;
-let gyroCalibrated = false;
-
-// Store raw calibration values
-let calAlpha = 0, calBeta = 0, calGamma = 0;
-let curAlpha = 0, curBeta = 0, curGamma = 0;
-
-let dragging = false, dragSX = 0, dragSY = 0, dragYaw0 = 0, dragPitch0 = 0;
-
-let gazeHit = null, gazeTimer = 0, gazeProg = 0;
-let clockOpen = false;
-
-let prevTime = 0, lastTexTime = 0;
-
-let sphereVBO, sphereIBO, sphereCount;
+let gl,canvas;
+let panoTexture=null;
+let loadDone=false,loadStarted=false;
+let pitch=0,yaw=0,roll=0;
+let tPitch=0,tYaw=0,tRoll=0;
+let gyroReady=false,gyroCalibrated=false;
+let calAlpha=0,calBeta=0,calGamma=0;
+let curAlpha=0,curBeta=0,curGamma=0;
+let initialBeta=90;
+let dragging=false,dragSX=0,dragSY=0,dragYaw0=0,dragPitch0=0;
+let gazeHit=null,gazeTimer=0,gazeProg=0;
+let prevTime=0,lastTexTime=0;
+let sphereVBO,sphereIBO,sphereCount;
 let quadBuf;
 let progPano;
+let texCard=null,texAppBGs=[],texCrosshair=null,texGazeRing=null,texCloseBtn=null;
+let texReady=false;
+let appIconImages=[],appIconsLoaded=0;
 
-let texCard = null;
-let texApps = [];
-let texAppBGs = [];
-let texCrosshair = null;
-let texGazeRing = null;
-let texClockWin = null;
-let texCloseBtn = null;
-let texReady = false;
+// Hand tracking
+let handDetector=null;
+let handResults=null;
+let camVideo=null;
+let camReady=false;
+let handTrackingReady=false;
+let leftHandLandmarks=null,rightHandLandmarks=null;
+let leftPinch=false,rightPinch=false;
+let leftPinchPoint=null,rightPinchPoint=null;
+let prevLeftPinch=false,prevRightPinch=false;
+let handTexLeft=null,handTexRight=null;
+let pinchClickLeft=false,pinchClickRight=false;
 
-let appIconImages = [];
-let appIconsLoaded = 0;
+// Hover state per app
+let hoverStates={};
+APP_ICONS.forEach(a=>{hoverStates[a.id]={hover:false,prog:0}});
 
-/* ═══════════════════════════════════════════
-   ORIENTATION / LOCK
-   ═══════════════════════════════════════════ */
-function lockLS() {
-    try { screen.orientation.lock('landscape-primary').catch(() => {}); } catch(e) {}
+/* Orientation */
+function lockLS(){try{screen.orientation.lock('landscape-primary').catch(()=>{})}catch(e){}}
+function isLS(){return innerWidth>innerHeight}
+function checkOrient(){
+    const el=document.getElementById('rotate-screen');
+    if(isLS()){el.style.opacity='0';setTimeout(()=>{el.style.display='none';beginLoad()},550)}
+    else{el.style.display='flex';el.style.opacity='1'}
 }
-function isLS() { return innerWidth > innerHeight; }
+window.addEventListener('resize',()=>{checkOrient();if(canvas){canvas.width=innerWidth*devicePixelRatio;canvas.height=innerHeight*devicePixelRatio}});
+window.addEventListener('orientationchange',()=>setTimeout(checkOrient,350));
 
-function checkOrient() {
-    const el = document.getElementById('rotate-screen');
-    if (isLS()) {
-        el.style.opacity = '0';
-        setTimeout(() => { el.style.display = 'none'; beginLoad(); }, 550);
-    } else {
-        el.style.display = 'flex';
-        el.style.opacity = '1';
-    }
-}
-
-window.addEventListener('resize', () => {
-    checkOrient();
-    if (canvas) {
-        canvas.width = innerWidth * devicePixelRatio;
-        canvas.height = innerHeight * devicePixelRatio;
-    }
-});
-window.addEventListener('orientationchange', () => setTimeout(checkOrient, 350));
-
-/* ═══════════════════════════════════════════
-   IMAGE LOADING + CACHE
-   ═══════════════════════════════════════════ */
-function beginLoad() {
-    if (loadStarted) return;
-    loadStarted = true;
-    const ls = document.getElementById('loading-screen');
-    ls.style.display = 'flex';
-    const bf = document.getElementById('bar-fg');
-    const pct = document.getElementById('ld-pct');
-
+/* Loading */
+function beginLoad(){
+    if(loadStarted)return;loadStarted=true;
+    const ls=document.getElementById('loading-screen');ls.style.display='flex';
+    const bf=document.getElementById('bar-fg'),pct=document.getElementById('ld-pct'),sub=document.getElementById('ld-sub');
     loadAppIcons();
-
-    if ('caches' in window) {
-        caches.open(CACHE_KEY).then(c => {
-            c.match(PANO_URL).then(r => {
-                if (r) r.blob().then(b => fromBlob(b, bf, pct, ls));
-                else fetchImg(c, bf, pct, ls);
-            });
-        }).catch(() => directLoad(bf, pct, ls));
-    } else directLoad(bf, pct, ls);
+    initCamera();
+    loadHandModel(sub);
+    if('caches' in window){
+        caches.open(CACHE_KEY).then(c=>{c.match(PANO_URL).then(r=>{if(r)r.blob().then(b=>fromBlob(b,bf,pct,ls));else fetchImg(c,bf,pct,ls)})}).catch(()=>directLoad(bf,pct,ls));
+    }else directLoad(bf,pct,ls);
 }
 
-function fetchImg(cache, bf, pct, ls) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', PANO_URL, true);
-    xhr.responseType = 'blob';
-    xhr.onprogress = e => {
-        if (e.lengthComputable) {
-            const p = e.loaded / e.total * 100;
-            bf.style.width = p + '%';
-            pct.textContent = Math.round(p) + '%';
-        }
-    };
-    xhr.onload = () => {
-        if (xhr.status === 200) {
-            const blob = xhr.response;
-            cache.put(PANO_URL, new Response(blob.slice(0)));
-            fromBlob(blob, bf, pct, ls);
-        } else directLoad(bf, pct, ls);
-    };
-    xhr.onerror = () => directLoad(bf, pct, ls);
-    xhr.send();
+function fetchImg(cache,bf,pct,ls){
+    const xhr=new XMLHttpRequest();xhr.open('GET',PANO_URL,true);xhr.responseType='blob';
+    xhr.onprogress=e=>{if(e.lengthComputable){const p=e.loaded/e.total*100;bf.style.width=p+'%';pct.textContent=Math.round(p)+'%'}};
+    xhr.onload=()=>{if(xhr.status===200){const blob=xhr.response;cache.put(PANO_URL,new Response(blob.slice(0)));fromBlob(blob,bf,pct,ls)}else directLoad(bf,pct,ls)};
+    xhr.onerror=()=>directLoad(bf,pct,ls);xhr.send();
 }
 
-function fromBlob(blob, bf, pct, ls) {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-        bf.style.width = '100%';
-        pct.textContent = '100%';
-        setTimeout(() => imgDone(img, ls), 450);
-    };
-    img.onerror = () => directLoad(bf, pct, ls);
-    img.src = url;
+function fromBlob(blob,bf,pct,ls){
+    const url=URL.createObjectURL(blob);const img=new Image();img.crossOrigin='anonymous';
+    img.onload=()=>{bf.style.width='100%';pct.textContent='100%';setTimeout(()=>imgDone(img,ls),450)};
+    img.onerror=()=>directLoad(bf,pct,ls);img.src=url;
 }
 
-function directLoad(bf, pct, ls) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    let p = 0;
-    const iv = setInterval(() => {
-        p = Math.min(p + 2, 90);
-        bf.style.width = p + '%';
-        pct.textContent = Math.round(p) + '%';
-    }, 70);
-    img.onload = () => {
-        clearInterval(iv);
-        bf.style.width = '100%';
-        pct.textContent = '100%';
-        setTimeout(() => imgDone(img, ls), 450);
-    };
-    img.onerror = () => {
-        clearInterval(iv);
-        const c = document.createElement('canvas');
-        c.width = 2048; c.height = 1024;
-        const cx = c.getContext('2d');
-        const grd = cx.createLinearGradient(0, 0, 2048, 1024);
-        grd.addColorStop(0, '#0a0a3a');
-        grd.addColorStop(0.5, '#0c1e4a');
-        grd.addColorStop(1, '#0a0a3a');
-        cx.fillStyle = grd;
-        cx.fillRect(0, 0, 2048, 1024);
-        for (let i = 0; i < 300; i++) {
-            cx.fillStyle = `rgba(255,255,255,${Math.random()*0.5+0.1})`;
-            cx.beginPath();
-            cx.arc(Math.random()*2048, Math.random()*1024, Math.random()*1.5+0.3, 0, Math.PI*2);
-            cx.fill();
-        }
-        bf.style.width = '100%';
-        pct.textContent = '100%';
-        setTimeout(() => imgDone(c, ls), 450);
-    };
-    img.src = PANO_URL;
+function directLoad(bf,pct,ls){
+    const img=new Image();img.crossOrigin='anonymous';let p=0;
+    const iv=setInterval(()=>{p=Math.min(p+2,90);bf.style.width=p+'%';pct.textContent=Math.round(p)+'%'},70);
+    img.onload=()=>{clearInterval(iv);bf.style.width='100%';pct.textContent='100%';setTimeout(()=>imgDone(img,ls),450)};
+    img.onerror=()=>{clearInterval(iv);
+        const c=document.createElement('canvas');c.width=2048;c.height=1024;const cx=c.getContext('2d');
+        const grd=cx.createLinearGradient(0,0,2048,1024);grd.addColorStop(0,'#0a0a3a');grd.addColorStop(0.5,'#0c1e4a');grd.addColorStop(1,'#0a0a3a');
+        cx.fillStyle=grd;cx.fillRect(0,0,2048,1024);
+        for(let i=0;i<300;i++){cx.fillStyle=`rgba(255,255,255,${Math.random()*0.5+0.1})`;cx.beginPath();cx.arc(Math.random()*2048,Math.random()*1024,Math.random()*1.5+0.3,0,Math.PI*2);cx.fill()}
+        bf.style.width='100%';pct.textContent='100%';setTimeout(()=>imgDone(c,ls),450)};
+    img.src=PANO_URL;
 }
 
-function imgDone(img, ls) {
-    loadDone = true;
-    ls.style.opacity = '0';
-    setTimeout(() => { ls.style.display = 'none'; initVR(img); }, 700);
+function imgDone(img,ls){loadDone=true;ls.style.opacity='0';setTimeout(()=>{ls.style.display='none';initVR(img)},700)}
+
+function loadAppIcons(){
+    appIconImages=new Array(APP_ICONS.length).fill(null);
+    APP_ICONS.forEach((app,i)=>{const img=new Image();img.crossOrigin='anonymous';
+        img.onload=()=>{appIconImages[i]=img;appIconsLoaded++;if(texReady)buildAppCardTextures()};
+        img.onerror=()=>{appIconsLoaded++};img.src=app.url});
 }
 
-function loadAppIcons() {
-    appIconImages = new Array(APP_ICONS.length).fill(null);
-    APP_ICONS.forEach((app, i) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-            appIconImages[i] = img;
-            appIconsLoaded++;
-            if (texReady) buildAppCardTextures();
+/* Camera */
+function initCamera(){
+    camVideo=document.getElementById('cam');
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:320},height:{ideal:240}},audio:false})
+    .then(stream=>{camVideo.srcObject=stream;camVideo.onloadedmetadata=()=>{camVideo.play();camReady=true}})
+    .catch(()=>{
+        navigator.mediaDevices.getUserMedia({video:{width:{ideal:320},height:{ideal:240}},audio:false})
+        .then(stream=>{camVideo.srcObject=stream;camVideo.onloadedmetadata=()=>{camVideo.play();camReady=true}})
+        .catch(()=>{})
+    });
+}
+
+/* Hand Tracking via MediaPipe */
+let mpHands=null,mpCamera=null;
+function loadHandModel(subEl){
+    if(subEl)subEl.textContent='Loading hand tracking...';
+    const script1=document.createElement('script');
+    script1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js';
+    script1.crossOrigin='anonymous';
+    script1.onload=()=>{
+        const script2=document.createElement('script');
+        script2.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js';
+        script2.crossOrigin='anonymous';
+        script2.onload=()=>{
+            if(subEl)subEl.textContent='Initializing hand model...';
+            initHandTracking(subEl);
         };
-        img.onerror = () => { appIconsLoaded++; };
-        img.src = app.url;
-    });
+        script2.onerror=()=>{if(subEl)subEl.textContent='Hand tracking unavailable'};
+        document.head.appendChild(script2);
+    };
+    script1.onerror=()=>{if(subEl)subEl.textContent='Hand tracking unavailable'};
+    document.head.appendChild(script1);
 }
 
-/* ═══════════════════════════════════════════
-   WEBGL INIT
-   ═══════════════════════════════════════════ */
-function initVR(img) {
+function initHandTracking(subEl){
+    try{
+        mpHands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`});
+        mpHands.setOptions({maxNumHands:2,modelComplexity:1,minDetectionConfidence:0.6,minTrackingConfidence:0.5});
+        mpHands.onResults(onHandResults);
+        handTrackingReady=true;
+        if(subEl)subEl.textContent='Hand tracking ready ✓';
+        startHandLoop();
+    }catch(e){if(subEl)subEl.textContent='Hand tracking error'}
+}
+
+let handLoopRunning=false;
+function startHandLoop(){
+    if(handLoopRunning)return;handLoopRunning=true;
+    async function loop(){
+        if(camReady&&mpHands&&camVideo.readyState>=2){
+            try{await mpHands.send({image:camVideo})}catch(e){}
+        }
+        setTimeout(loop,100);
+    }
+    loop();
+}
+
+function onHandResults(results){
+    leftHandLandmarks=null;rightHandLandmarks=null;
+    if(results.multiHandLandmarks&&results.multiHandedness){
+        for(let i=0;i<results.multiHandLandmarks.length;i++){
+            const hand=results.multiHandedness[i];
+            const lm=results.multiHandLandmarks[i];
+            if(hand.label==='Right')leftHandLandmarks=lm;
+            else rightHandLandmarks=lm;
+        }
+    }
+}
+
+function getPinchDist(landmarks){
+    if(!landmarks)return 999;
+    const t=landmarks[4],idx=landmarks[8];
+    const dx=t.x-idx.x,dy=t.y-idx.y,dz=t.z-idx.z;
+    return Math.sqrt(dx*dx+dy*dy+dz*dz);
+}
+
+function getPinchMid(landmarks){
+    if(!landmarks)return null;
+    const t=landmarks[4],idx=landmarks[8];
+    return{x:(t.x+idx.x)/2,y:(t.y+idx.y)/2,z:(t.z+idx.z)/2};
+}
+
+function updateHandState(){
+    const PINCH_THRESH=0.06;
+    prevLeftPinch=leftPinch;prevRightPinch=rightPinch;
+    leftPinch=getPinchDist(leftHandLandmarks)<PINCH_THRESH;
+    rightPinch=getPinchDist(rightHandLandmarks)<PINCH_THRESH;
+    leftPinchPoint=getPinchMid(leftHandLandmarks);
+    rightPinchPoint=getPinchMid(rightHandLandmarks);
+    pinchClickLeft=leftPinch&&!prevLeftPinch;
+    pinchClickRight=rightPinch&&!prevRightPinch;
+}
+
+/* WebGL Init */
+function initVR(img){
     lockLS();
-    document.getElementById('vr-wrap').style.display = 'block';
-    canvas = document.getElementById('glc');
-    canvas.width = innerWidth * devicePixelRatio;
-    canvas.height = innerHeight * devicePixelRatio;
-
-    gl = canvas.getContext('webgl', { antialias: true, alpha: false })
-      || canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
-    if (!gl) { alert('WebGL not supported'); return; }
-
-    gl.enable(gl.DEPTH_TEST);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-    panoTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, panoTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    setTexParams(gl.TEXTURE_2D);
-
-    buildShaders();
-    buildSphere(52, 52, 50);
-    quadBuf = gl.createBuffer();
-
-    initGyro();
-    initTouch();
-
-    canvas.addEventListener('click', firstTap, { once: false });
-
-    prevTime = performance.now();
-    requestAnimationFrame(mainLoop);
-
-    try { document.documentElement.requestFullscreen().catch(() => {}); } catch(e) {}
+    document.getElementById('vr-wrap').style.display='block';
+    canvas=document.getElementById('glc');
+    canvas.width=innerWidth*devicePixelRatio;canvas.height=innerHeight*devicePixelRatio;
+    gl=canvas.getContext('webgl',{antialias:true,alpha:false})||canvas.getContext('experimental-webgl',{antialias:true,alpha:false});
+    if(!gl){alert('WebGL not supported');return}
+    gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+    panoTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,panoTexture);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);setTexParams(gl.TEXTURE_2D);
+    buildShaders();buildSphere(52,52,50);quadBuf=gl.createBuffer();
+    initGyro();initTouch();
+    canvas.addEventListener('click',firstTap,{once:false});
+    prevTime=performance.now();requestAnimationFrame(mainLoop);
+    try{document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
 }
 
-let firstTapped = false;
-function firstTap() {
-    if (!firstTapped) {
-        firstTapped = true;
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-        lockLS();
-        reqGyroPermission();
+let firstTapped=false;
+function firstTap(){
+    if(!firstTapped){firstTapped=true;
+        if(!document.fullscreenElement)document.documentElement.requestFullscreen().catch(()=>{});
+        lockLS();reqGyroPermission();
     }
 }
 
-/* ═══════════════════════════════════════════
-   SHADERS
-   ═══════════════════════════════════════════ */
-const VS = `
-attribute vec3 aP;
-attribute vec2 aT;
-uniform mat4 uProj, uView;
-varying vec2 vT;
-void main() {
-    gl_Position = uProj * uView * vec4(aP, 1.0);
-    vT = aT;
-}`;
-const FS = `
-precision mediump float;
-varying vec2 vT;
-uniform sampler2D uTex;
-void main() {
-    gl_FragColor = texture2D(uTex, vT);
-}`;
+const VS=`attribute vec3 aP;attribute vec2 aT;uniform mat4 uProj,uView;varying vec2 vT;void main(){gl_Position=uProj*uView*vec4(aP,1.0);vT=aT;}`;
+const FS=`precision mediump float;varying vec2 vT;uniform sampler2D uTex;void main(){gl_FragColor=texture2D(uTex,vT);}`;
 
-function buildShaders() {
-    progPano = mkProg(VS, FS);
-}
-function mkProg(v, f) {
-    const p = gl.createProgram();
-    gl.attachShader(p, mkSh(gl.VERTEX_SHADER, v));
-    gl.attachShader(p, mkSh(gl.FRAGMENT_SHADER, f));
-    gl.linkProgram(p);
-    return p;
-}
-function mkSh(t, s) {
-    const sh = gl.createShader(t);
-    gl.shaderSource(sh, s);
-    gl.compileShader(sh);
-    return sh;
+function buildShaders(){progPano=mkProg(VS,FS)}
+function mkProg(v,f){const p=gl.createProgram();gl.attachShader(p,mkSh(gl.VERTEX_SHADER,v));gl.attachShader(p,mkSh(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);return p}
+function mkSh(t,s){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);return sh}
+
+function buildSphere(latB,lonB,R){
+    const v=[],idx=[];
+    for(let i=0;i<=latB;i++){const th=i*Math.PI/latB,st=Math.sin(th),ct=Math.cos(th);
+        for(let j=0;j<=lonB;j++){const ph=j*2*Math.PI/lonB;v.push(R*Math.cos(ph)*st,R*ct,R*Math.sin(ph)*st,1-j/lonB,i/latB)}}
+    for(let i=0;i<latB;i++)for(let j=0;j<lonB;j++){const a=i*(lonB+1)+j,b=a+lonB+1;idx.push(a,b,a+1,b,b+1,a+1)}
+    sphereVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);
+    sphereIBO=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphereIBO);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
+    sphereCount=idx.length;
 }
 
-/* ═══════════════════════════════════════════
-   GEOMETRY
-   ═══════════════════════════════════════════ */
-function buildSphere(latB, lonB, R) {
-    const v = [], idx = [];
-    for (let i = 0; i <= latB; i++) {
-        const th = i * Math.PI / latB, st = Math.sin(th), ct = Math.cos(th);
-        for (let j = 0; j <= lonB; j++) {
-            const ph = j * 2 * Math.PI / lonB;
-            v.push(R * Math.cos(ph) * st, R * ct, R * Math.sin(ph) * st, 1 - j / lonB, i / latB);
+function setTexParams(t){gl.texParameteri(t,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(t,gl.TEXTURE_MAG_FILTER,gl.LINEAR)}
+
+/* Matrix */
+function I(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
+function persp(fov,asp,n,f){const t=1/Math.tan(fov/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
+function mul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s}return o}
+function rX(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[5]=c;r[6]=s;r[9]=-s;r[10]=c;return mul(m,r)}
+function rY(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[2]=-s;r[8]=s;r[10]=c;return mul(m,r)}
+function rZ(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[1]=s;r[4]=-s;r[5]=c;return mul(m,r)}
+function tr(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mul(m,t)}
+function sc(m,x,y,z){const s=I();s[0]=x;s[5]=y;s[10]=z;return mul(m,s)}
+function viewMatrix(){let m=I();m=rZ(m,roll);m=rX(m,pitch);m=rY(m,yaw);return m}
+
+/* Gyro */
+function wrapAngle(a){while(a>180)a-=360;while(a<-180)a+=360;return a}
+
+function handleOrientationEvent(e){
+    if(e.alpha===null||e.beta===null||e.gamma===null)return;
+    curAlpha=e.alpha;curBeta=e.beta;curGamma=e.gamma;
+    if(!gyroCalibrated){
+        calAlpha=e.alpha;calBeta=e.beta;calGamma=e.gamma;
+        initialBeta=e.beta;
+        gyroCalibrated=true;gyroReady=true;
+    }
+}
+
+function initGyro(){
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission!=='function')
+        window.addEventListener('deviceorientation',handleOrientationEvent,true);
+}
+
+function reqGyroPermission(){
+    if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function')
+        DeviceOrientationEvent.requestPermission().then(s=>{if(s==='granted')window.addEventListener('deviceorientation',handleOrientationEvent,true)}).catch(()=>{});
+}
+
+function updateGyro(){
+    if(!gyroReady)return;
+    const D=Math.PI/180;
+    let dAlpha=wrapAngle(curAlpha-calAlpha);
+    let dBeta=wrapAngle(curBeta-calBeta);
+    let dGamma=curGamma-calGamma;
+    dGamma=Math.max(-70,Math.min(70,dGamma));
+    dBeta=Math.max(-70,Math.min(70,dBeta));
+    dAlpha=Math.max(-160,Math.min(160,dAlpha));
+    tYaw=dAlpha*D;
+    tPitch=dGamma*D;
+    tRoll=-dBeta*D*0.3;
+    tPitch=Math.max(-Math.PI*0.45,Math.min(Math.PI*0.45,tPitch));
+    tRoll=Math.max(-0.35,Math.min(0.35,tRoll));
+}
+
+/* Touch */
+function initTouch(){
+    canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging=true;dragSX=e.touches[0].clientX;dragSY=e.touches[0].clientY;dragYaw0=tYaw;dragPitch0=tPitch}e.preventDefault()},{passive:false});
+    canvas.addEventListener('touchmove',e=>{if(dragging&&!gyroReady&&e.touches.length===1){tYaw=dragYaw0-(e.touches[0].clientX-dragSX)*0.004;tPitch=dragPitch0-(e.touches[0].clientY-dragSY)*0.004;tPitch=Math.max(-Math.PI*0.45,Math.min(Math.PI*0.45,tPitch))}e.preventDefault()},{passive:false});
+    canvas.addEventListener('touchend',()=>{dragging=false});
+    canvas.addEventListener('mousedown',e=>{dragging=true;dragSX=e.clientX;dragSY=e.clientY;dragYaw0=tYaw;dragPitch0=tPitch});
+    window.addEventListener('mousemove',e=>{if(dragging&&!gyroReady){tYaw=dragYaw0-(e.clientX-dragSX)*0.004;tPitch=dragPitch0-(e.clientY-dragSY)*0.004;tPitch=Math.max(-Math.PI*0.45,Math.min(Math.PI*0.45,tPitch))}});
+    window.addEventListener('mouseup',()=>{dragging=false});
+}
+
+/* Tex helpers */
+function mkTex(src){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);setTexParams(gl.TEXTURE_2D);return t}
+function rRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+
+/* Dynamic textures */
+function updateCardTexture(){
+    const d=new Date();
+    const ts=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const ds=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const c=document.createElement('canvas');c.width=512;c.height=200;const x=c.getContext('2d');
+    x.fillStyle='rgba(255,255,255,0.06)';rRect(x,0,0,512,200,24);x.fill();
+    x.strokeStyle='rgba(255,255,255,0.14)';x.lineWidth=1.5;rRect(x,0,0,512,200,24);x.stroke();
+    const g=x.createRadialGradient(256,100,10,256,100,256);g.addColorStop(0,'rgba(80,160,255,0.05)');g.addColorStop(1,'rgba(0,0,0,0)');
+    x.fillStyle=g;x.fillRect(0,0,512,200);
+    x.fillStyle='#fff';x.textAlign='center';x.font="bold 56px 'Segoe UI',sans-serif";x.fillText(ts,256,88);
+    x.fillStyle='rgba(255,255,255,0.65)';x.font="18px 'Segoe UI',sans-serif";x.fillText(ds,256,140);
+    if(texCard)gl.deleteTexture(texCard);texCard=mkTex(c);
+}
+
+function buildAppCardTextures(){
+    texAppBGs.forEach(t=>{if(t)gl.deleteTexture(t)});texAppBGs=[];
+    APP_ICONS.forEach((app,i)=>{
+        const c=document.createElement('canvas');c.width=160;c.height=160;const x=c.getContext('2d');
+        const hs=hoverStates[app.id];
+        const hoverAlpha=hs?hs.prog:0;
+        x.fillStyle=`rgba(255,255,255,${0.07+hoverAlpha*0.08})`;rRect(x,4,4,152,152,22);x.fill();
+        x.strokeStyle=`rgba(${hoverAlpha>0?'0,200,255':'255,255,255'},${0.16+hoverAlpha*0.4})`;
+        x.lineWidth=1.2+hoverAlpha*1.5;rRect(x,4,4,152,152,22);x.stroke();
+        if(hoverAlpha>0){
+            x.shadowColor='rgba(0,200,255,0.3)';x.shadowBlur=10*hoverAlpha;
+            x.strokeStyle=`rgba(0,200,255,${hoverAlpha*0.3})`;x.lineWidth=2;rRect(x,2,2,156,156,24);x.stroke();
+            x.shadowBlur=0;
         }
-    }
-    for (let i = 0; i < latB; i++) {
-        for (let j = 0; j < lonB; j++) {
-            const a = i * (lonB + 1) + j, b = a + lonB + 1;
-            idx.push(a, b, a + 1, b, b + 1, a + 1);
+        const img=appIconImages[i];
+        if(img){x.save();rRect(x,30,20,100,100,16);x.clip();x.drawImage(img,30,20,100,100);x.restore()}
+        else{x.font='50px sans-serif';x.textAlign='center';x.fillText('📱',80,82)}
+        x.fillStyle='rgba(255,255,255,0.85)';x.font="12px 'Segoe UI',sans-serif";x.textAlign='center';x.fillText(app.name,80,145);
+        // Gaze progress bar
+        if(hs&&hs.prog>0){
+            x.fillStyle=`rgba(0,200,255,${0.3+hs.prog*0.4})`;
+            rRect(x,20,150,120*hs.prog,4,2);x.fill();
         }
-    }
-    sphereVBO = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
-    sphereIBO = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
-    sphereCount = idx.length;
-}
-
-function setTexParams(t) {
-    gl.texParameteri(t, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(t, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(t, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(t, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-}
-
-/* ═══════════════════════════════════════════
-   MATRIX MATH
-   ═══════════════════════════════════════════ */
-function I() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
-
-function persp(fov, asp, n, f) {
-    const t = 1 / Math.tan(fov / 2), nf = 1 / (n - f);
-    return new Float32Array([t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)*nf,-1, 0,0,2*f*n*nf,0]);
-}
-
-function mul(a, b) {
-    const o = new Float32Array(16);
-    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-        let s = 0;
-        for (let k = 0; k < 4; k++) s += a[k*4+j] * b[i*4+k];
-        o[i*4+j] = s;
-    }
-    return o;
-}
-
-function rX(m, a) { const c=Math.cos(a),s=Math.sin(a),r=I(); r[5]=c;r[6]=s;r[9]=-s;r[10]=c; return mul(m,r); }
-function rY(m, a) { const c=Math.cos(a),s=Math.sin(a),r=I(); r[0]=c;r[2]=-s;r[8]=s;r[10]=c; return mul(m,r); }
-function rZ(m, a) { const c=Math.cos(a),s=Math.sin(a),r=I(); r[0]=c;r[1]=s;r[4]=-s;r[5]=c; return mul(m,r); }
-function tr(m, x, y, z) { const t=I(); t[12]=x;t[13]=y;t[14]=z; return mul(m,t); }
-function sc(m, x, y, z) { const s=I(); s[0]=x;s[5]=y;s[10]=z; return mul(m,s); }
-
-function viewMatrix() {
-    let m = I();
-    m = rZ(m, roll);
-    m = rX(m, pitch);
-    m = rY(m, yaw);
-    return m;
-}
-
-/* ═══════════════════════════════════════════
-   GYROSCOPE — SIMPLE EULER APPROACH FOR LANDSCAPE
-   
-   In landscape mode (phone rotated 90° CCW):
-   - alpha (compass heading) changes when you turn LEFT/RIGHT → this controls YAW
-   - gamma (left/right tilt in portrait) becomes forward/back tilt in landscape → this controls PITCH
-   - beta (forward/back tilt in portrait) becomes left/right lean in landscape → this controls ROLL
-   
-   All INVERTED so:
-   - Phone moves left  → view goes RIGHT
-   - Phone moves right → view goes LEFT
-   - Phone tilts up    → view goes DOWN
-   - Phone tilts down  → view goes UP
-   - Phone leans left  → view leans RIGHT
-   - Phone leans right → view leans LEFT
-   ═══════════════════════════════════════════ */
-
-function wrapAngle(a) {
-    while (a > 180) a -= 360;
-    while (a < -180) a += 360;
-    return a;
-}
-
-function handleOrientationEvent(e) {
-    if (e.alpha === null || e.beta === null || e.gamma === null) return;
-
-    curAlpha = e.alpha;
-    curBeta  = e.beta;
-    curGamma = e.gamma;
-
-    if (!gyroCalibrated) {
-        calAlpha = e.alpha;
-        calBeta  = e.beta;
-        calGamma = e.gamma;
-        gyroCalibrated = true;
-        gyroReady = true;
-    }
-}
-
-function initGyro() {
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission !== 'function') {
-        window.addEventListener('deviceorientation', handleOrientationEvent, true);
-    }
-}
-
-function reqGyroPermission() {
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().then(s => {
-            if (s === 'granted') {
-                window.addEventListener('deviceorientation', handleOrientationEvent, true);
-            }
-        }).catch(() => {});
-    }
-}
-
-function updateGyro() {
-    if (!gyroReady) return;
-
-    const D = Math.PI / 180;
-
-    // Delta from calibration
-    let dAlpha = wrapAngle(curAlpha - calAlpha);  // left/right turn (compass)
-    let dBeta  = wrapAngle(curBeta  - calBeta);   // portrait: forward/back tilt
-    let dGamma = curGamma - calGamma;             // portrait: left/right tilt
-
-    // Clamp gamma delta (gamma range is only -90 to 90)
-    dGamma = Math.max(-80, Math.min(80, dGamma));
-
-    /*
-     * LANDSCAPE MAPPING (phone held sideways, long edge horizontal):
-     * 
-     * When phone is in landscape-primary (rotated 90° CCW from portrait):
-     * - Turning phone left/right (yaw) = alpha changes → VR yaw (INVERTED)
-     * - Tilting phone up/down (pitch)   = gamma changes → VR pitch (INVERTED)
-     * - Leaning phone left/right (roll) = beta changes  → VR roll (INVERTED, subtle)
-     *
-     * The key fix: in landscape, the axes swap:
-     *   alpha → yaw   (horizontal rotation, left/right)
-     *   gamma → pitch (vertical tilt, up/down) 
-     *   beta  → roll  (lean/tilt sideways)
-     */
-
-    // YAW: alpha controls horizontal turning — INVERTED
-    tYaw = dAlpha * D;
-
-    // PITCH: gamma controls vertical tilt in landscape — INVERTED
-    tPitch = dGamma * D;
-
-    // ROLL: beta controls sideways lean in landscape — INVERTED, subtle
-    tRoll = -dBeta * D * 0.15;
-
-    // Clamp to safe ranges
-    tPitch = Math.max(-Math.PI * 0.85, Math.min(Math.PI * 0.85, tPitch));
-    tRoll  = Math.max(-0.4, Math.min(0.4, tRoll));
-}
-
-/* ═══════════════════════════════════════════
-   TOUCH / MOUSE FALLBACK
-   ═══════════════════════════════════════════ */
-function initTouch() {
-    canvas.addEventListener('touchstart', e => {
-        if (e.touches.length === 1) {
-            dragging = true;
-            dragSX = e.touches[0].clientX;
-            dragSY = e.touches[0].clientY;
-            dragYaw0 = tYaw;
-            dragPitch0 = tPitch;
-        }
-        e.preventDefault();
-    }, { passive: false });
-
-    canvas.addEventListener('touchmove', e => {
-        if (dragging && !gyroReady && e.touches.length === 1) {
-            tYaw   = dragYaw0   - (e.touches[0].clientX - dragSX) * 0.004;
-            tPitch = dragPitch0 - (e.touches[0].clientY - dragSY) * 0.004;
-            tPitch = Math.max(-Math.PI*0.85, Math.min(Math.PI*0.85, tPitch));
-        }
-        e.preventDefault();
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', () => { dragging = false; });
-
-    canvas.addEventListener('mousedown', e => {
-        dragging = true;
-        dragSX = e.clientX;
-        dragSY = e.clientY;
-        dragYaw0 = tYaw;
-        dragPitch0 = tPitch;
-    });
-
-    window.addEventListener('mousemove', e => {
-        if (dragging && !gyroReady) {
-            tYaw   = dragYaw0   - (e.clientX - dragSX) * 0.004;
-            tPitch = dragPitch0 - (e.clientY - dragSY) * 0.004;
-            tPitch = Math.max(-Math.PI*0.85, Math.min(Math.PI*0.85, tPitch));
-        }
-    });
-
-    window.addEventListener('mouseup', () => { dragging = false; });
-}
-
-/* ═══════════════════════════════════════════
-   TEXTURE HELPERS
-   ═══════════════════════════════════════════ */
-function mkTex(src) {
-    const t = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-    setTexParams(gl.TEXTURE_2D);
-    return t;
-}
-
-function rRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x+r, y);
-    ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-    ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-    ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-    ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
-    ctx.closePath();
-}
-
-/* ═══════════════════════════════════════════
-   DYNAMIC TEXTURES
-   ═══════════════════════════════════════════ */
-function updateCardTexture() {
-    const d = new Date();
-    const ts = d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-    const ds = d.toLocaleDateString([], { weekday:'long', month:'long', day:'numeric', year:'numeric' });
-
-    const c = document.createElement('canvas'); c.width = 512; c.height = 200;
-    const x = c.getContext('2d');
-
-    x.fillStyle = 'rgba(255,255,255,0.06)';
-    rRect(x, 0, 0, 512, 200, 24); x.fill();
-    x.strokeStyle = 'rgba(255,255,255,0.14)';
-    x.lineWidth = 1.5;
-    rRect(x, 0, 0, 512, 200, 24); x.stroke();
-
-    const g = x.createRadialGradient(256, 100, 10, 256, 100, 256);
-    g.addColorStop(0, 'rgba(80,160,255,0.05)');
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = g; x.fillRect(0, 0, 512, 200);
-
-    x.fillStyle = '#fff'; x.textAlign = 'center';
-    x.font = "bold 56px 'Segoe UI',sans-serif";
-    x.fillText(ts, 256, 88);
-    x.fillStyle = 'rgba(255,255,255,0.65)';
-    x.font = "18px 'Segoe UI',sans-serif";
-    x.fillText(ds, 256, 140);
-
-    if (texCard) gl.deleteTexture(texCard);
-    texCard = mkTex(c);
-}
-
-function buildAppCardTextures() {
-    texAppBGs.forEach(t => { if (t) gl.deleteTexture(t); });
-    texAppBGs = [];
-
-    APP_ICONS.forEach((app, i) => {
-        const c = document.createElement('canvas'); c.width = 160; c.height = 160;
-        const x = c.getContext('2d');
-
-        x.fillStyle = 'rgba(255,255,255,0.07)';
-        rRect(x, 4, 4, 152, 152, 22); x.fill();
-        x.strokeStyle = 'rgba(255,255,255,0.16)';
-        x.lineWidth = 1.2;
-        rRect(x, 4, 4, 152, 152, 22); x.stroke();
-
-        const img = appIconImages[i];
-        if (img) {
-            x.save();
-            rRect(x, 30, 20, 100, 100, 16);
-            x.clip();
-            x.drawImage(img, 30, 20, 100, 100);
-            x.restore();
-        } else {
-            x.font = '50px sans-serif'; x.textAlign = 'center';
-            x.fillText('📱', 80, 82);
-        }
-
-        x.fillStyle = 'rgba(255,255,255,0.85)';
-        x.font = "12px 'Segoe UI',sans-serif";
-        x.textAlign = 'center';
-        x.fillText(app.name, 80, 145);
-
         texAppBGs.push(mkTex(c));
     });
 }
 
-function buildCrosshairTexture() {
-    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-    const x = c.getContext('2d');
-
-    x.strokeStyle = 'rgba(255,255,255,0.5)';
-    x.lineWidth = 2;
-    x.beginPath(); x.arc(64, 64, 18, 0, Math.PI*2); x.stroke();
-
-    x.strokeStyle = 'rgba(255,255,255,0.6)';
-    x.lineWidth = 1.5;
-    x.beginPath(); x.moveTo(64, 40); x.lineTo(64, 52); x.stroke();
-    x.beginPath(); x.moveTo(64, 76); x.lineTo(64, 88); x.stroke();
-    x.beginPath(); x.moveTo(40, 64); x.lineTo(52, 64); x.stroke();
-    x.beginPath(); x.moveTo(76, 64); x.lineTo(88, 64); x.stroke();
-
-    x.fillStyle = 'rgba(255,255,255,0.85)';
-    x.beginPath(); x.arc(64, 64, 3, 0, Math.PI*2); x.fill();
-
-    if (texCrosshair) gl.deleteTexture(texCrosshair);
-    texCrosshair = mkTex(c);
+function buildCrosshairTexture(){
+    const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
+    x.strokeStyle='rgba(255,255,255,0.5)';x.lineWidth=2;x.beginPath();x.arc(64,64,18,0,Math.PI*2);x.stroke();
+    x.strokeStyle='rgba(255,255,255,0.6)';x.lineWidth=1.5;
+    x.beginPath();x.moveTo(64,40);x.lineTo(64,52);x.stroke();
+    x.beginPath();x.moveTo(64,76);x.lineTo(64,88);x.stroke();
+    x.beginPath();x.moveTo(40,64);x.lineTo(52,64);x.stroke();
+    x.beginPath();x.moveTo(76,64);x.lineTo(88,64);x.stroke();
+    x.fillStyle='rgba(255,255,255,0.85)';x.beginPath();x.arc(64,64,3,0,Math.PI*2);x.fill();
+    if(texCrosshair)gl.deleteTexture(texCrosshair);texCrosshair=mkTex(c);
 }
 
-function buildGazeTexture(prog) {
-    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-    const x = c.getContext('2d');
+function buildGazeTexture(prog){
+    const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
+    x.strokeStyle='rgba(255,255,255,0.2)';x.lineWidth=4;x.beginPath();x.arc(64,64,30,0,Math.PI*2);x.stroke();
+    if(prog>0){x.strokeStyle='rgba(0,200,255,0.9)';x.lineWidth=4;x.lineCap='round';x.beginPath();x.arc(64,64,30,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);x.stroke()}
+    if(prog>0){x.fillStyle=`rgba(0,200,255,${prog*0.25})`;x.beginPath();x.arc(64,64,26,0,Math.PI*2);x.fill()}
+    x.fillStyle='rgba(255,255,255,0.9)';x.beginPath();x.arc(64,64,3.5,0,Math.PI*2);x.fill();
+    x.strokeStyle=`rgba(255,255,255,${0.5+prog*0.3})`;x.lineWidth=1.5;
+    x.beginPath();x.moveTo(64,28);x.lineTo(64,42);x.stroke();
+    x.beginPath();x.moveTo(64,86);x.lineTo(64,100);x.stroke();
+    x.beginPath();x.moveTo(28,64);x.lineTo(42,64);x.stroke();
+    x.beginPath();x.moveTo(86,64);x.lineTo(100,64);x.stroke();
+    if(texGazeRing)gl.deleteTexture(texGazeRing);texGazeRing=mkTex(c);
+}
 
-    x.strokeStyle = 'rgba(255,255,255,0.2)';
-    x.lineWidth = 4;
-    x.beginPath(); x.arc(64, 64, 30, 0, Math.PI*2); x.stroke();
+/* Hand skeleton texture */
+const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const FINGER_COLORS=['#ff4466','#ffaa00','#44ff66','#4488ff','#cc44ff'];
 
-    if (prog > 0) {
-        x.strokeStyle = 'rgba(0,200,255,0.9)';
-        x.lineWidth = 4;
-        x.lineCap = 'round';
+function buildHandTexture(landmarks,isLeft){
+    if(!landmarks)return null;
+    const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
+    x.clearRect(0,0,256,256);
+    
+    // Draw connections
+    HAND_CONNECTIONS.forEach(([a,b])=>{
+        const la=landmarks[a],lb=landmarks[b];
+        const fingerIdx=Math.floor(Math.max(a,b)/4);
+        const col=FINGER_COLORS[Math.min(fingerIdx,4)];
+        x.strokeStyle=col;x.lineWidth=3;x.lineCap='round';
         x.beginPath();
-        x.arc(64, 64, 30, -Math.PI/2, -Math.PI/2 + Math.PI*2*prog);
+        x.moveTo((isLeft?1-la.x:la.x)*256,la.y*256);
+        x.lineTo((isLeft?1-lb.x:lb.x)*256,lb.y*256);
         x.stroke();
+    });
+    
+    // Draw joints
+    landmarks.forEach((lm,i)=>{
+        const fingerIdx=Math.floor(i/4);
+        const col=FINGER_COLORS[Math.min(fingerIdx,4)];
+        const px=(isLeft?1-lm.x:lm.x)*256,py=lm.y*256;
+        x.fillStyle=col;x.beginPath();x.arc(px,py,4,0,Math.PI*2);x.fill();
+        x.strokeStyle='rgba(255,255,255,0.6)';x.lineWidth=1;x.beginPath();x.arc(px,py,4,0,Math.PI*2);x.stroke();
+    });
+    
+    // Draw pinch circles (between thumb tip index 4 and index tip index 8)
+    const thumb=landmarks[4],index=landmarks[8];
+    const midX=((isLeft?1-thumb.x:thumb.x)+(isLeft?1-index.x:index.x))/2*256;
+    const midY=(thumb.y+index.y)/2*256;
+    const dist=Math.sqrt(Math.pow(thumb.x-index.x,2)+Math.pow(thumb.y-index.y,2));
+    const isPinching=dist<0.06;
+    
+    // Circle at pinch point
+    x.beginPath();x.arc(midX,midY,isPinching?12:8,0,Math.PI*2);
+    x.fillStyle=isPinching?'rgba(0,255,150,0.7)':'rgba(255,255,255,0.3)';x.fill();
+    x.strokeStyle=isPinching?'rgba(0,255,200,0.9)':'rgba(255,255,255,0.5)';x.lineWidth=2;
+    x.beginPath();x.arc(midX,midY,isPinching?12:8,0,Math.PI*2);x.stroke();
+    
+    if(isPinching){
+        x.shadowColor='rgba(0,255,150,0.5)';x.shadowBlur=15;
+        x.fillStyle='rgba(0,255,150,0.4)';x.beginPath();x.arc(midX,midY,16,0,Math.PI*2);x.fill();
+        x.shadowBlur=0;
     }
+    
+    // Circles at thumb and index tips
+    [landmarks[4],landmarks[8]].forEach((tip,ti)=>{
+        const tpx=(isLeft?1-tip.x:tip.x)*256,tpy=tip.y*256;
+        x.beginPath();x.arc(tpx,tpy,6,0,Math.PI*2);
+        x.fillStyle=ti===0?'rgba(255,100,100,0.6)':'rgba(100,200,255,0.6)';x.fill();
+        x.strokeStyle='#fff';x.lineWidth=1.5;x.beginPath();x.arc(tpx,tpy,6,0,Math.PI*2);x.stroke();
+    });
+    
+    return mkTex(c);
+}
 
-    if (prog > 0) {
-        x.fillStyle = `rgba(0,200,255,${prog*0.25})`;
-        x.beginPath(); x.arc(64, 64, 26, 0, Math.PI*2); x.fill();
+/* Gaze */
+function getAppPositions(){
+    const startX=-3.75,spacing=1.5;
+    return APP_ICONS.map((a,i)=>({...a,pos:[startX+i*spacing,-1.0,-5],w:1.0,h:1.0,idx:i}));
+}
+
+function gazeDir(){return[-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)]}
+
+function hitQuad(dir,pos,w,h){
+    if(Math.abs(dir[2])<0.001)return false;
+    const t=pos[2]/(-dir[2]);if(t<0)return false;
+    const hx=dir[0]*t,hy=dir[1]*t;
+    return hx>=pos[0]-w/2&&hx<=pos[0]+w/2&&hy>=pos[1]-h/2&&hy<=pos[1]+h/2;
+}
+
+function pinchHitQuad(pinchPt,pos,w,h){
+    if(!pinchPt)return false;
+    const px=(pinchPt.x-0.5)*8;
+    const py=-(pinchPt.y-0.5)*6;
+    return px>=pos[0]-w/2&&px<=pos[0]+w/2&&py>=pos[1]-h/2&&py<=pos[1]+h/2;
+}
+
+let needAppRebuild=false;
+
+function checkGaze(dt){
+    const dir=gazeDir();
+    let hit=null;
+    const apps=getAppPositions();
+    
+    // Check gaze hit
+    for(const app of apps){
+        if(hitQuad(dir,app.pos,app.w,app.h)){hit=app.id;break}
     }
-
-    x.fillStyle = 'rgba(255,255,255,0.9)';
-    x.beginPath(); x.arc(64, 64, 3.5, 0, Math.PI*2); x.fill();
-
-    x.strokeStyle = `rgba(255,255,255,${0.5+prog*0.3})`;
-    x.lineWidth = 1.5;
-    x.beginPath(); x.moveTo(64,28); x.lineTo(64,42); x.stroke();
-    x.beginPath(); x.moveTo(64,86); x.lineTo(64,100); x.stroke();
-    x.beginPath(); x.moveTo(28,64); x.lineTo(42,64); x.stroke();
-    x.beginPath(); x.moveTo(86,64); x.lineTo(100,64); x.stroke();
-
-    if (texGazeRing) gl.deleteTexture(texGazeRing);
-    texGazeRing = mkTex(c);
-}
-
-function updateClockTexture() {
-    const now = new Date();
-    const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds(), ms = now.getMilliseconds();
-
-    const c = document.createElement('canvas'); c.width = 512; c.height = 512;
-    const x = c.getContext('2d');
-
-    x.fillStyle = 'rgba(6,6,28,0.94)';
-    rRect(x, 0, 0, 512, 512, 26); x.fill();
-    x.strokeStyle = 'rgba(255,255,255,0.12)';
-    x.lineWidth = 1.5;
-    rRect(x, 0, 0, 512, 512, 26); x.stroke();
-
-    const ig = x.createRadialGradient(256, 230, 10, 256, 230, 250);
-    ig.addColorStop(0, 'rgba(0,100,255,0.04)');
-    ig.addColorStop(1, 'rgba(0,0,0,0)');
-    x.fillStyle = ig; x.fillRect(0, 0, 512, 512);
-
-    x.fillStyle = '#fff';
-    x.font = "bold 24px 'Segoe UI',sans-serif";
-    x.textAlign = 'center';
-    x.fillText('Clock', 256, 42);
-
-    const cx2 = 256, cy2 = 215, r = 125;
-
-    x.strokeStyle = 'rgba(255,255,255,0.12)'; x.lineWidth = 2;
-    x.beginPath(); x.arc(cx2, cy2, r, 0, Math.PI*2); x.stroke();
-
-    for (let i = 0; i < 60; i++) {
-        const a = (i*6 - 90) * Math.PI/180;
-        const major = i%5 === 0;
-        const inner = major ? r-16 : r-8;
-        x.strokeStyle = major ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.12)';
-        x.lineWidth = major ? 2 : 0.8;
-        x.beginPath();
-        x.moveTo(cx2+Math.cos(a)*inner, cy2+Math.sin(a)*inner);
-        x.lineTo(cx2+Math.cos(a)*(r-3), cy2+Math.sin(a)*(r-3));
-        x.stroke();
-    }
-
-    x.fillStyle = 'rgba(255,255,255,0.4)';
-    x.font = "15px 'Segoe UI',sans-serif";
-    for (let i = 1; i <= 12; i++) {
-        const a = (i*30 - 90) * Math.PI/180;
-        x.fillText(String(i), cx2+Math.cos(a)*(r-30)-5, cy2+Math.sin(a)*(r-30)+5);
-    }
-
-    const hA = ((h%12) + m/60) * 30 - 90;
-    x.strokeStyle = '#fff'; x.lineWidth = 5; x.lineCap = 'round';
-    x.beginPath(); x.moveTo(cx2, cy2);
-    x.lineTo(cx2+Math.cos(hA*Math.PI/180)*58, cy2+Math.sin(hA*Math.PI/180)*58); x.stroke();
-
-    const mA = (m + s/60) * 6 - 90;
-    x.strokeStyle = 'rgba(190,210,255,0.9)'; x.lineWidth = 3;
-    x.beginPath(); x.moveTo(cx2, cy2);
-    x.lineTo(cx2+Math.cos(mA*Math.PI/180)*85, cy2+Math.sin(mA*Math.PI/180)*85); x.stroke();
-
-    const sA = (s + ms/1000) * 6 - 90;
-    x.strokeStyle = 'rgba(0,200,255,0.85)'; x.lineWidth = 1.5;
-    x.beginPath(); x.moveTo(cx2, cy2);
-    x.lineTo(cx2+Math.cos(sA*Math.PI/180)*100, cy2+Math.sin(sA*Math.PI/180)*100); x.stroke();
-
-    x.fillStyle = '#fff'; x.beginPath(); x.arc(cx2, cy2, 4.5, 0, Math.PI*2); x.fill();
-    x.fillStyle = 'rgba(0,200,255,0.8)'; x.beginPath(); x.arc(cx2, cy2, 2.5, 0, Math.PI*2); x.fill();
-
-    x.fillStyle = '#fff'; x.font = "bold 40px 'Courier New',monospace";
-    x.fillText(now.toLocaleTimeString(), 256, 400);
-    x.fillStyle = 'rgba(255,255,255,0.55)'; x.font = "16px 'Segoe UI',sans-serif";
-    x.fillText(now.toLocaleDateString([], { weekday:'long', month:'short', day:'numeric' }), 256, 445);
-
-    if (texClockWin) gl.deleteTexture(texClockWin);
-    texClockWin = mkTex(c);
-}
-
-function buildCloseTexture() {
-    const c = document.createElement('canvas'); c.width = 80; c.height = 80;
-    const x = c.getContext('2d');
-
-    x.fillStyle = 'rgba(255,40,40,0.75)';
-    x.beginPath(); x.arc(40, 40, 26, 0, Math.PI*2); x.fill();
-    x.strokeStyle = 'rgba(255,120,120,0.3)'; x.lineWidth = 1.5;
-    x.beginPath(); x.arc(40, 40, 26, 0, Math.PI*2); x.stroke();
-
-    x.strokeStyle = '#fff'; x.lineWidth = 3.5; x.lineCap = 'round';
-    x.beginPath(); x.moveTo(26,26); x.lineTo(54,54); x.stroke();
-    x.beginPath(); x.moveTo(54,26); x.lineTo(26,54); x.stroke();
-
-    if (texCloseBtn) gl.deleteTexture(texCloseBtn);
-    texCloseBtn = mkTex(c);
-}
-
-/* ═══════════════════════════════════════════
-   GAZE / RAY INTERSECTION
-   ═══════════════════════════════════════════ */
-function getAppPositions() {
-    const startX = -3.75;
-    const spacing = 1.5;
-    return APP_ICONS.map((a, i) => ({
-        ...a,
-        pos: [startX + i * spacing, -1.0, -5],
-        w: 1.0,
-        h: 1.0,
-        idx: i
-    }));
-}
-
-function gazeDir() {
-    return [
-        -Math.sin(yaw) * Math.cos(pitch),
-         Math.sin(pitch),
-        -Math.cos(yaw) * Math.cos(pitch)
-    ];
-}
-
-function hitQuad(dir, pos, w, h) {
-    if (Math.abs(dir[2]) < 0.001) return false;
-    const t = pos[2] / (-dir[2]);
-    if (t < 0) return false;
-    const hx = dir[0] * t, hy = dir[1] * t;
-    return hx >= pos[0] - w/2 && hx <= pos[0] + w/2 &&
-           hy >= pos[1] - h/2 && hy <= pos[1] + h/2;
-}
-
-function checkGaze(dt) {
-    const dir = gazeDir();
-    let hit = null;
-
-    if (clockOpen) {
-        if (hitQuad(dir, [0, 3.3, -5], 0.65, 0.65)) hit = 'close';
-    } else {
-        const apps = getAppPositions();
-        for (const app of apps) {
-            if (hitQuad(dir, app.pos, app.w, app.h)) {
-                hit = app.id;
-                break;
-            }
+    
+    // Check pinch hits
+    let pinchHit=null;
+    if(pinchClickLeft||pinchClickRight){
+        const pt=pinchClickLeft?leftPinchPoint:rightPinchPoint;
+        for(const app of apps){
+            if(pinchHitQuad(pt,app.pos,app.w,app.h)){pinchHit=app.id;break}
         }
     }
-
-    if (hit) {
-        if (gazeHit === hit) {
-            gazeTimer += dt;
-            gazeProg = Math.min(gazeTimer / GAZE_DUR, 1.0);
-            if (gazeTimer >= GAZE_DUR) {
-                if (hit === 'clock') clockOpen = true;
-                else if (hit === 'close') clockOpen = false;
-                gazeTimer = 0; gazeProg = 0; gazeHit = null;
-            }
-        } else {
-            gazeHit = hit;
-            gazeTimer = 0;
-            gazeProg = 0;
+    
+    // Update hover states
+    let anyHoverChanged=false;
+    APP_ICONS.forEach(app=>{
+        const hs=hoverStates[app.id];
+        const isHit=hit===app.id;
+        if(isHit&&!hs.hover){hs.hover=true;anyHoverChanged=true}
+        else if(!isHit&&hs.hover){hs.hover=false;anyHoverChanged=true}
+        if(hs.hover){
+            const oldProg=hs.prog;
+            hs.prog=Math.min(hs.prog+dt*0.5,1);
+            if(Math.abs(hs.prog-oldProg)>0.01)anyHoverChanged=true;
+        }else{
+            const oldProg=hs.prog;
+            hs.prog=Math.max(hs.prog-dt*2,0);
+            if(Math.abs(hs.prog-oldProg)>0.01)anyHoverChanged=true;
         }
-    } else {
-        gazeHit = null;
-        gazeTimer = 0;
-        gazeProg = 0;
-    }
+    });
+    if(anyHoverChanged)needAppRebuild=true;
+    
+    // Gaze timer
+    if(hit){
+        if(gazeHit===hit){
+            gazeTimer+=dt;
+            gazeProg=Math.min(gazeTimer/GAZE_DUR,1.0);
+            if(gazeTimer>=GAZE_DUR){
+                // 2 second gaze completed - no action (apps don't open)
+                gazeTimer=0;gazeProg=0;gazeHit=null;
+            }
+        }else{gazeHit=hit;gazeTimer=0;gazeProg=0}
+    }else{gazeHit=null;gazeTimer=0;gazeProg=0}
 }
 
-/* ═══════════════════════════════════════════
-   DRAW HELPERS
-   ═══════════════════════════════════════════ */
-function drawTexQuad(proj, view, pos, w, h, tex) {
-    if (!tex) return;
-    gl.useProgram(progPano);
-    const aP  = gl.getAttribLocation(progPano, 'aP');
-    const aT  = gl.getAttribLocation(progPano, 'aT');
-    const uP  = gl.getUniformLocation(progPano, 'uProj');
-    const uV  = gl.getUniformLocation(progPano, 'uView');
-    const uTx = gl.getUniformLocation(progPano, 'uTex');
-
-    let mdl = I();
-    mdl = tr(mdl, pos[0], pos[1], pos[2]);
-    mdl = sc(mdl, w, h, 1);
-    const mv = mul(view, mdl);
-
-    const v = new Float32Array([
-        -.5,-.5,0, 0,1,
-         .5,-.5,0, 1,1,
-         .5, .5,0, 1,0,
-        -.5,-.5,0, 0,1,
-         .5, .5,0, 1,0,
-        -.5, .5,0, 0,0
-    ]);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, v, gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 20, 0);
-    gl.enableVertexAttribArray(aT); gl.vertexAttribPointer(aT, 2, gl.FLOAT, false, 20, 12);
-    gl.uniformMatrix4fv(uP, false, proj);
-    gl.uniformMatrix4fv(uV, false, mv);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.uniform1i(uTx, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-    gl.disableVertexAttribArray(aT);
+/* Draw */
+function drawTexQuad(proj,view,pos,w,h,tex){
+    if(!tex)return;gl.useProgram(progPano);
+    const aP=gl.getAttribLocation(progPano,'aP'),aT=gl.getAttribLocation(progPano,'aT');
+    let mdl=I();mdl=tr(mdl,pos[0],pos[1],pos[2]);mdl=sc(mdl,w,h,1);const mv=mul(view,mdl);
+    const v=new Float32Array([-.5,-.5,0,0,1,.5,-.5,0,1,1,.5,.5,0,1,0,-.5,-.5,0,0,1,.5,.5,0,1,0,-.5,.5,0,0,0]);
+    gl.bindBuffer(gl.ARRAY_BUFFER,quadBuf);gl.bufferData(gl.ARRAY_BUFFER,v,gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(aP);gl.vertexAttribPointer(aP,3,gl.FLOAT,false,20,0);
+    gl.enableVertexAttribArray(aT);gl.vertexAttribPointer(aT,2,gl.FLOAT,false,20,12);
+    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uProj'),false,proj);
+    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uView'),false,mv);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(progPano,'uTex'),0);
+    gl.drawArrays(gl.TRIANGLES,0,6);gl.disableVertexAttribArray(aT);
 }
 
-function renderEye(proj, view) {
-    gl.useProgram(progPano);
+function renderEye(proj,view){
+    gl.useProgram(progPano);gl.disable(gl.DEPTH_TEST);
+    const aP=gl.getAttribLocation(progPano,'aP'),aT=gl.getAttribLocation(progPano,'aT');
+    gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);
+    gl.enableVertexAttribArray(aP);gl.vertexAttribPointer(aP,3,gl.FLOAT,false,20,0);
+    gl.enableVertexAttribArray(aT);gl.vertexAttribPointer(aT,2,gl.FLOAT,false,20,12);
+    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uProj'),false,proj);
+    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uView'),false,view);
+    gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,panoTexture);
+    gl.uniform1i(gl.getUniformLocation(progPano,'uTex'),0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphereIBO);
+    gl.drawElements(gl.TRIANGLES,sphereCount,gl.UNSIGNED_SHORT,0);
+    gl.disableVertexAttribArray(aT);gl.enable(gl.DEPTH_TEST);
+
+    drawTexQuad(proj,view,[0,2.2,-5],4,1.8,texCard);
+
+    const apps=getAppPositions();
+    apps.forEach((a,i)=>{if(texAppBGs[i])drawTexQuad(proj,view,a.pos,a.w,a.h,texAppBGs[i])});
+
+    // Hand skeletons in VR space
     gl.disable(gl.DEPTH_TEST);
-    const aP = gl.getAttribLocation(progPano, 'aP');
-    const aT = gl.getAttribLocation(progPano, 'aT');
-    gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
-    gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 20, 0);
-    gl.enableVertexAttribArray(aT); gl.vertexAttribPointer(aT, 2, gl.FLOAT, false, 20, 12);
-    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uProj'), false, proj);
-    gl.uniformMatrix4fv(gl.getUniformLocation(progPano,'uView'), false, view);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, panoTexture);
-    gl.uniform1i(gl.getUniformLocation(progPano,'uTex'), 0);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
-    gl.drawElements(gl.TRIANGLES, sphereCount, gl.UNSIGNED_SHORT, 0);
-    gl.disableVertexAttribArray(aT);
-    gl.enable(gl.DEPTH_TEST);
+    if(handTexLeft)drawTexQuad(proj,view,[-2.5,0,-4],3,3,handTexLeft);
+    if(handTexRight)drawTexQuad(proj,view,[2.5,0,-4],3,3,handTexRight);
 
-    drawTexQuad(proj, view, [0, 2.2, -5], 4, 1.8, texCard);
-
-    if (!clockOpen) {
-        const apps = getAppPositions();
-        apps.forEach((a, i) => {
-            if (texAppBGs[i]) drawTexQuad(proj, view, a.pos, a.w, a.h, texAppBGs[i]);
-        });
-    }
-
-    if (clockOpen && texClockWin) {
-        drawTexQuad(proj, view, [0, 0.8, -5], 4, 4, texClockWin);
-        drawTexQuad(proj, view, [0, 3.3, -5], 0.5, 0.5, texCloseBtn);
-    }
-
-    gl.disable(gl.DEPTH_TEST);
-    const asp2 = (canvas.width / 2) / canvas.height;
-    const cP = persp(FOV, asp2, 0.1, 100);
-    const cV = I();
-    const crossTex  = gazeHit ? texGazeRing : texCrosshair;
-    const crossSize = gazeHit ? 0.22 : 0.14;
-    drawTexQuad(cP, cV, [0, 0, -2], crossSize, crossSize, crossTex);
+    // Crosshair
+    const asp2=(canvas.width/2)/canvas.height;
+    const cP=persp(FOV,asp2,0.1,100);const cV=I();
+    const crossTex=gazeHit?texGazeRing:texCrosshair;
+    const crossSize=gazeHit?0.22:0.14;
+    drawTexQuad(cP,cV,[0,0,-2],crossSize,crossSize,crossTex);
     gl.enable(gl.DEPTH_TEST);
 }
 
-function renderFrame() {
-    const hw = Math.floor(canvas.width / 2);
-    const asp = hw / canvas.height;
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    const v = viewMatrix();
-
-    gl.viewport(0, 0, hw, canvas.height);
-    const pL = persp(FOV, asp, 0.1, 100);
-    const vL = mul(v, tr(I(), IPD*0.5, 0, 0));
-    renderEye(pL, vL);
-
-    gl.viewport(hw, 0, hw, canvas.height);
-    const pR = persp(FOV, asp, 0.1, 100);
-    const vR = mul(v, tr(I(), -IPD*0.5, 0, 0));
-    renderEye(pR, vR);
+function renderFrame(){
+    const hw=Math.floor(canvas.width/2);const asp=hw/canvas.height;
+    gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+    const v=viewMatrix();
+    gl.viewport(0,0,hw,canvas.height);renderEye(persp(FOV,asp,0.1,100),mul(v,tr(I(),IPD*0.5,0,0)));
+    gl.viewport(hw,0,hw,canvas.height);renderEye(persp(FOV,asp,0.1,100),mul(v,tr(I(),-IPD*0.5,0,0)));
 }
 
-/* ═══════════════════════════════════════════
-   MAIN LOOP
-   ═══════════════════════════════════════════ */
-function mainLoop(now) {
+/* Main loop */
+let handTexUpdateTimer=0;
+
+function mainLoop(now){
     requestAnimationFrame(mainLoop);
-    const dt = Math.min((now - prevTime) / 1000, 0.1);
-    prevTime = now;
+    const dt=Math.min((now-prevTime)/1000,0.1);prevTime=now;
 
-    if (!texReady) {
-        updateCardTexture();
-        buildAppCardTextures();
-        buildCrosshairTexture();
-        buildGazeTexture(0);
-        buildCloseTexture();
-        texReady = true;
-    }
+    if(!texReady){updateCardTexture();buildAppCardTextures();buildCrosshairTexture();buildGazeTexture(0);texReady=true}
 
-    if (now - lastTexTime > 400) {
-        updateCardTexture();
-        if (clockOpen) updateClockTexture();
-        lastTexTime = now;
-    }
+    if(now-lastTexTime>400){updateCardTexture();lastTexTime=now}
 
     updateGyro();
+    pitch+=(tPitch-pitch)*CAM_SMOOTH;
+    yaw+=(tYaw-yaw)*CAM_SMOOTH;
+    roll+=(tRoll-roll)*TILT_SMOOTH;
 
-    pitch += (tPitch - pitch) * CAM_SMOOTH;
-    yaw   += (tYaw   - yaw)   * CAM_SMOOTH;
-    roll  += (tRoll  - roll)  * TILT_SMOOTH;
+    // Hand tracking update
+    updateHandState();
+    handTexUpdateTimer+=dt;
+    if(handTexUpdateTimer>0.1){
+        handTexUpdateTimer=0;
+        if(handTexLeft)gl.deleteTexture(handTexLeft);
+        if(handTexRight)gl.deleteTexture(handTexRight);
+        handTexLeft=leftHandLandmarks?buildHandTexture(leftHandLandmarks,true):null;
+        handTexRight=rightHandLandmarks?buildHandTexture(rightHandLandmarks,false):null;
+    }
 
     checkGaze(dt);
-    if (gazeHit) buildGazeTexture(gazeProg);
+    if(gazeHit)buildGazeTexture(gazeProg);
+    if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
 
-    const cw = canvas.clientWidth  * devicePixelRatio;
-    const ch = canvas.clientHeight * devicePixelRatio;
-    if (canvas.width !== cw || canvas.height !== ch) {
-        canvas.width = cw;
-        canvas.height = ch;
-    }
+    const cw=canvas.clientWidth*devicePixelRatio,ch=canvas.clientHeight*devicePixelRatio;
+    if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
 
     renderFrame();
 }
 
-window.addEventListener('load', () => { lockLS(); checkOrient(); });
+window.addEventListener('load',()=>{lockLS();checkOrient()});
 </script>
 </body>
 </html>
