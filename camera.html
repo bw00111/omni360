@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Camera</title>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Outlined" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --md-primary: #6750A4;
+            --md-on-primary: #FFFFFF;
+            --md-primary-container: #EADDFF;
+            --md-on-primary-container: #21005D;
+            --md-surface: #1C1B1F;
+            --md-surface-dim: #141218;
+            --md-surface-container: #211F26;
+            --md-surface-container-high: #2B2930;
+            --md-surface-bright: #3B383E;
+            --md-on-surface: #E6E1E5;
+            --md-on-surface-variant: #CAC4D0;
+            --md-outline: #938F99;
+            --md-outline-variant: #49454F;
+        }
+
+        body {
+            font-family: 'Google Sans', 'Roboto', sans-serif;
+            background: #000;
+            color: var(--md-on-surface);
+            height: 100dvh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        /* Camera App Layout */
+        .camera-app {
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            background: #000;
+            position: relative;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, transparent 100%);
+        }
+
+        .top-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .top-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .top-btn:active {
+            transform: scale(0.9);
+        }
+
+        .top-btn .material-symbols-outlined {
+            font-size: 22px;
+        }
+
+        .top-center {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .top-chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(12px);
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .top-chip.active {
+            background: var(--md-primary);
+        }
+
+        .top-chip:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .top-chip.active:hover {
+            background: var(--md-primary);
+        }
+
+        /* Viewfinder */
+        .viewfinder-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .viewfinder {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #cameraVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .viewfinder-placeholder {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .viewfinder-placeholder .material-symbols-outlined {
+            font-size: 64px;
+            color: rgba(255,255,255,0.15);
+        }
+
+        .viewfinder-placeholder p {
+            color: rgba(255,255,255,0.3);
+            font-size: 14px;
+        }
+
+        /* Focus Ring */
+        .focus-ring {
+            position: absolute;
+            width: 72px;
+            height: 72px;
+            border: 2px solid white;
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 15;
+            transition: opacity 0.1s;
+        }
+
+        .focus-ring.show {
+            opacity: 1;
+            animation: focus-anim 0.6s ease-out forwards;
+        }
+
+        @keyframes focus-anim {
+            0% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(0.9); opacity: 1; }
+            70% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+
+        /* Grid Overlay */
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .grid-overlay.show {
+            opacity: 1;
+        }
+
+        .grid-overlay .grid-line {
+            position: absolute;
+            background: rgba(255,255,255,0.15);
+        }
+
+        .grid-overlay .grid-line.h1 { top: 33.33%; left: 0; right: 0; height: 1px; }
+        .grid-overlay .grid-line.h2 { top: 66.66%; left: 0; right: 0; height: 1px; }
+        .grid-overlay .grid-line.v1 { left: 33.33%; top: 0; bottom: 0; width: 1px; }
+        .grid-overlay .grid-line.v2 { left: 66.66%; top: 0; bottom: 0; width: 1px; }
+
+        /* Level Indicator */
+        .level-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 12;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .level-indicator.show {
+            opacity: 1;
+        }
+
+        .level-line {
+            width: 120px;
+            height: 2px;
+            background: rgba(255,255,255,0.4);
+            border-radius: 1px;
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .level-line.level {
+            background: var(--md-primary);
+        }
+
+        /* Zoom Control */
+        .zoom-control {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 15;
+            display: flex;
+            gap: 6px;
+            padding: 4px;
+            border-radius: 24px;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(12px);
+        }
+
+        .zoom-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .zoom-btn.active {
+            background: var(--md-primary-container);
+            color: var(--md-on-primary-container);
+        }
+
+        .zoom-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* Mode Selector */
+        .mode-selector {
+            padding: 16px 0 8px;
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            background: #000;
+        }
+
+        .mode-item {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255,255,255,0.45);
+            cursor: pointer;
+            padding: 8px 4px;
+            position: relative;
+            border: none;
+            background: none;
+            letter-spacing: 0.5px;
+            transition: color 0.3s;
+            font-family: inherit;
+        }
+
+        .mode-item.active {
+            color: var(--md-primary-container);
+        }
+
+        .mode-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--md-primary-container);
+        }
+
+        /* Bottom Controls */
+        .bottom-controls {
+            padding: 20px 32px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #000;
+        }
+
+        /* Thumbnail Preview */
+        .thumbnail-preview {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            border: 2.5px solid rgba(255,255,255,0.3);
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--md-surface-container);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .thumbnail-preview:hover {
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        .thumbnail-preview:active {
+            transform: scale(0.9);
+        }
+
+        .thumbnail-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .thumbnail-preview .material-symbols-outlined {
+            font-size: 22px;
+            color: var(--md-outline);
+        }
+
+        /* Shutter Button */
+        .shutter-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .shutter-btn {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: 4px solid white;
+            background: transparent;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .shutter-btn::before {
+            content: '';
+            width: 58px;
+            height: 58px;
+            border-radius: 50%;
+            background: white;
+            transition: all 0.15s ease;
+        }
+
+        .shutter-btn:hover::before {
+            background: rgba(255,255,255,0.9);
+        }
+
+        .shutter-btn:active {
+            transform: scale(0.93);
+        }
+
+        .shutter-btn:active::before {
+            background: rgba(255,255,255,0.7);
+            transform: scale(0.92);
+        }
+
+        .shutter-btn.video-mode {
+            border-color: #FF4444;
+        }
+
+        .shutter-btn.video-mode::before {
+            background: #FF4444;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+        }
+
+        .shutter-btn.recording {
+            border-color: #FF4444;
+        }
+
+        .shutter-btn.recording::before {
+            background: #FF4444;
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            animation: pulse-record 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-record {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Flash animation */
+        .flash-overlay {
+            position: fixed;
+            inset: 0;
+            background: white;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .flash-overlay.flash {
+            animation: flash-anim 0.25s ease-out;
+        }
+
+        @keyframes flash-anim {
+            0% { opacity: 0.9; }
+            100% { opacity: 0; }
+        }
+
+        /* Switch Camera */
+        .switch-cam-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .switch-cam-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .switch-cam-btn:active {
+            transform: scale(0.85) rotate(180deg);
+        }
+
+        .switch-cam-btn .material-symbols-outlined {
+            font-size: 24px;
+            transition: transform 0.4s ease;
+        }
+
+        .switch-cam-btn.flipped .material-symbols-outlined {
+            transform: rotate(180deg);
+        }
+
+        /* Captured Preview */
+        .captured-preview {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .captured-preview.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .captured-preview .preview-top {
+            display: flex;
+            align-items: center;
+            padding: 12px 8px;
+            gap: 8px;
+        }
+
+        .captured-preview .preview-image {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 16px;
+        }
+
+        .captured-preview .preview-image img,
+        .captured-preview .preview-image canvas {
+            max-width: 100%;
+            max-height: 70vh;
+            border-radius: 16px;
+            object-fit: contain;
+        }
+
+        .captured-preview .preview-bottom {
+            padding: 20px 32px 40px;
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+        }
+
+        .preview-action-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: var(--md-surface-container-high);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .preview-action-btn.primary {
+            background: var(--md-primary);
+            color: var(--md-on-primary);
+        }
+
+        .preview-action-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .preview-action-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Recording timer */
+        .recording-timer {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border-radius: 20px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .recording-timer.show {
+            opacity: 1;
+        }
+
+        .rec-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #FF4444;
+            animation: blink 1s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .rec-time {
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            padding: 10px 20px;
+            border-radius: 12px;
+            background: var(--md-surface-container-high);
+            color: var(--md-on-surface);
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 200;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(12px);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Settings Panel */
+        .settings-panel {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            background: rgba(0,0,0,0.6);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .settings-panel.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .settings-sheet {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--md-surface-container);
+            border-radius: 28px 28px 0 0;
+            padding: 16px 0 40px;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.2, 0, 0, 1);
+        }
+
+        .settings-panel.show .settings-sheet {
+            transform: translateY(0);
+        }
+
+        .settings-handle {
+            width: 32px;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--md-outline);
+            margin: 0 auto 20px;
+        }
+
+        .settings-title {
+            font-size: 18px;
+            font-weight: 500;
+            padding: 0 24px 16px;
+            color: var(--md-on-surface);
+        }
+
+        .setting-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 24px;
+            gap: 16px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .setting-item:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .setting-item .material-symbols-outlined {
+            font-size: 24px;
+            color: var(--md-on-surface-variant);
+        }
+
+        .setting-item .setting-label {
+            flex: 1;
+        }
+
+        .setting-item .setting-label .title {
+            font-size: 15px;
+            color: var(--md-on-surface);
+        }
+
+        .setting-item .setting-label .subtitle {
+            font-size: 12px;
+            color: var(--md-on-surface-variant);
+            margin-top: 2px;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            width: 52px;
+            height: 32px;
+            border-radius: 16px;
+            background: var(--md-outline-variant);
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 2px solid var(--md-outline);
+            flex-shrink: 0;
+        }
+
+        .toggle-switch.on {
+            background: var(--md-primary);
+            border-color: var(--md-primary);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--md-outline);
+            top: 50%;
+            left: 6px;
+            transform: translateY(-50%);
+            transition: all 0.2s;
+        }
+
+        .toggle-switch.on::after {
+            left: calc(100% - 22px);
+            background: var(--md-on-primary);
+            width: 24px;
+            height: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="camera-app">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <button class="top-btn" id="closeBtn" title="Close">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            <div class="top-center">
+                <button class="top-chip" id="hdrBtn">HDR</button>
+            </div>
+            <div style="display:flex; gap:4px;">
+                <button class="top-btn" id="flashBtn" title="Flash">
+                    <span class="material-symbols-outlined filled" id="flashIcon">flash_off</span>
+                </button>
+                <button class="top-btn" id="timerBtn" title="Timer">
+                    <span class="material-symbols-outlined">timer</span>
+                </button>
+                <button class="top-btn" id="settingsBtn" title="Settings">
+                    <span class="material-symbols-outlined">settings</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Recording Timer -->
+        <div class="recording-timer" id="recordingTimer">
+            <div class="rec-dot"></div>
+            <span class="rec-time" id="recTime">00:00</span>
+        </div>
+
+        <!-- Viewfinder -->
+        <div class="viewfinder-container">
+            <div class="viewfinder" id="viewfinder">
+                <video id="cameraVideo" autoplay playsinline muted></video>
+                <div class="viewfinder-placeholder" id="placeholder">
+                    <span class="material-symbols-outlined">photo_camera</span>
+                    <p>Tap to start camera</p>
+                </div>
+                <div class="grid-overlay" id="gridOverlay">
+                    <div class="grid-line h1"></div>
+                    <div class="grid-line h2"></div>
+                    <div class="grid-line v1"></div>
+                    <div class="grid-line v2"></div>
+                </div>
+                <div class="focus-ring" id="focusRing"></div>
+                <div class="level-indicator" id="levelIndicator">
+                    <div class="level-line" id="levelLine"></div>
+                </div>
+            </div>
+
+            <!-- Zoom Control -->
+            <div class="zoom-control" id="zoomControl">
+                <button class="zoom-btn active" data-zoom="0.6">.5x</button>
+                <button class="zoom-btn" data-zoom="1">1x</button>
+                <button class="zoom-btn" data-zoom="2">2x</button>
+            </div>
+        </div>
+
+        <!-- Mode Selector -->
+        <div class="mode-selector" id="modeSelector">
+            <button class="mode-item" data-mode="night">NIGHT</button>
+            <button class="mode-item" data-mode="portrait">PORTRAIT</button>
+            <button class="mode-item active" data-mode="photo">PHOTO</button>
+            <button class="mode-item" data-mode="video">VIDEO</button>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="bottom-controls">
+            <div class="thumbnail-preview" id="thumbnailPreview">
+                <span class="material-symbols-outlined filled">image</span>
+            </div>
+            <div class="shutter-container">
+                <button class="shutter-btn" id="shutterBtn"></button>
+            </div>
+            <button class="switch-cam-btn" id="switchCamBtn" title="Switch camera">
+                <span class="material-symbols-outlined">flip_camera_ios</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Flash Overlay -->
+    <div class="flash-overlay" id="flashOverlay"></div>
+
+    <!-- Captured Preview -->
+    <div class="captured-preview" id="capturedPreview">
+        <div class="preview-top">
+            <button class="top-btn" id="previewBack">
+                <span class="material-symbols-outlined">arrow_back</span>
+            </button>
+        </div>
+        <div class="preview-image">
+            <canvas id="capturedCanvas"></canvas>
+        </div>
+        <div class="preview-bottom">
+            <button class="preview-action-btn" id="deleteBtn">
+                <span class="material-symbols-outlined">delete</span>
+            </button>
+            <button class="preview-action-btn" id="downloadBtn">
+                <span class="material-symbols-outlined">download</span>
+            </button>
+            <button class="preview-action-btn primary" id="shareBtn">
+                <span class="material-symbols-outlined">share</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+        <div class="settings-sheet">
+            <div class="settings-handle"></div>
+            <div class="settings-title">Settings</div>
+            <div class="setting-item" id="gridToggle">
+                <span class="material-symbols-outlined">grid_on</span>
+                <div class="setting-label">
+                    <div class="title">Grid lines</div>
+                    <div class="subtitle">Show rule of thirds overlay</div>
+                </div>
+                <div class="toggle-switch" id="gridSwitch"></div>
+            </div>
+            <div class="setting-item" id="levelToggle">
+                <span class="material-symbols-outlined">straighten</span>
+                <div class="setting-label">
+                    <div class="title">Level</div>
+                    <div class="subtitle">Show horizon level indicator</div>
+                </div>
+                <div class="toggle-switch" id="levelSwitch"></div>
+            </div>
+            <div class="setting-item" id="ratioToggle">
+                <span class="material-symbols-outlined">aspect_ratio</span>
+                <div class="setting-label">
+                    <div class="title">Aspect ratio</div>
+                    <div class="subtitle" id="ratioLabel">4:3</div>
+                </div>
+                <span class="material-symbols-outlined" style="font-size:20px; color: var(--md-outline);">chevron_right</span>
+            </div>
+            <div class="setting-item" id="qualityToggle">
+                <span class="material-symbols-outlined">high_quality</span>
+                <div class="setting-label">
+                    <div class="title">Photo quality</div>
+                    <div class="subtitle" id="qualityLabel">High</div>
+                </div>
+                <span class="material-symbols-outlined" style="font-size:20px; color: var(--md-outline);">chevron_right</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // State
+        const state = {
+            mode: 'photo',
+            flash: 'off',
+            timer: 0,
+            hdr: false,
+            grid: false,
+            level: false,
+            zoom: 0.6,
+            facingMode: 'environment',
+            cameraActive: false,
+            recording: false,
+            recordStartTime: null,
+            recordInterval: null,
+            capturedImages: [],
+            stream: null
+        };
+
+        // Elements
+        const el = {
+            video: document.getElementById('cameraVideo'),
+            placeholder: document.getElementById('placeholder'),
+            viewfinder: document.getElementById('viewfinder'),
+            shutterBtn: document.getElementById('shutterBtn'),
+            switchCamBtn: document.getElementById('switchCamBtn'),
+            flashBtn: document.getElementById('flashBtn'),
+            flashIcon: document.getElementById('flashIcon'),
+            timerBtn: document.getElementById('timerBtn'),
+            hdrBtn: document.getElementById('hdrBtn'),
+            settingsBtn: document.getElementById('settingsBtn'),
+            settingsPanel: document.getElementById('settingsPanel'),
+            modeSelector: document.getElementById('modeSelector'),
+            zoomControl: document.getElementById('zoomControl'),
+            gridOverlay: document.getElementById('gridOverlay'),
+            levelIndicator: document.getElementById('levelIndicator'),
+            levelLine: document.getElementById('levelLine'),
+            focusRing: document.getElementById('focusRing'),
+            flashOverlay: document.getElementById('flashOverlay'),
+            capturedPreview: document.getElementById('capturedPreview'),
+            capturedCanvas: document.getElementById('capturedCanvas'),
+            thumbnailPreview: document.getElementById('thumbnailPreview'),
+            previewBack: document.getElementById('previewBack'),
+            deleteBtn: document.getElementById('deleteBtn'),
+            downloadBtn: document.getElementById('downloadBtn'),
+            shareBtn: document.getElementById('shareBtn'),
+            recordingTimer: document.getElementById('recordingTimer'),
+            recTime: document.getElementById('recTime'),
+            gridToggle: document.getElementById('gridToggle'),
+            gridSwitch: document.getElementById('gridSwitch'),
+            levelToggle: document.getElementById('levelToggle'),
+            levelSwitch: document.getElementById('levelSwitch'),
+            toast: document.getElementById('toast'),
+            closeBtn: document.getElementById('closeBtn')
+        };
+
+        // Toast
+        let toastTimeout;
+        function showToast(msg) {
+            clearTimeout(toastTimeout);
+            el.toast.textContent = msg;
+            el.toast.classList.add('show');
+            toastTimeout = setTimeout(() => el.toast.classList.remove('show'), 2000);
+        }
+
+        // Camera
+        async function startCamera() {
+            try {
+                if (state.stream) {
+                    state.stream.getTracks().forEach(t => t.stop());
+                }
+                const constraints = {
+                    video: {
+                        facingMode: state.facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                };
+                state.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                el.video.srcObject = state.stream;
+                el.placeholder.style.display = 'none';
+                el.video.style.display = 'block';
+                state.cameraActive = true;
+            } catch (err) {
+                console.log('Camera not available, using placeholder');
+                el.placeholder.style.display = 'flex';
+                el.video.style.display = 'none';
+                state.cameraActive = false;
+            }
+        }
+
+        // Init camera on tap if needed
+        el.placeholder.addEventListener('click', startCamera);
+
+        // Focus tap
+        el.viewfinder.addEventListener('click', (e) => {
+            if (e.target.closest('.zoom-control')) return;
+            const rect = el.viewfinder.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            el.focusRing.style.left = x + 'px';
+            el.focusRing.style.top = y + 'px';
+            el.focusRing.classList.remove('show');
+            void el.focusRing.offsetWidth;
+            el.focusRing.classList.add('show');
+        });
+
+        // Flash
+        const flashModes = ['off', 'auto', 'on'];
+        const flashIcons = { off: 'flash_off', auto: 'flash_auto', on: 'flash_on' };
+        el.flashBtn.addEventListener('click', () => {
+            const idx = flashModes.indexOf(state.flash);
+            state.flash = flashModes[(idx + 1) % flashModes.length];
+            el.flashIcon.textContent = flashIcons[state.flash];
+            showToast(`Flash: ${state.flash}`);
+        });
+
+        // Timer
+        const timerModes = [0, 3, 10];
+        el.timerBtn.addEventListener('click', () => {
+            const idx = timerModes.indexOf(state.timer);
+            state.timer = timerModes[(idx + 1) % timerModes.length];
+            const icon = el.timerBtn.querySelector('.material-symbols-outlined');
+            if (state.timer === 0) {
+                icon.textContent = 'timer';
+                showToast('Timer: Off');
+            } else {
+                icon.textContent = `timer_${state.timer === 3 ? '3' : '10'}`;
+                showToast(`Timer: ${state.timer}s`);
+            }
+        });
+
+        // HDR
+        el.hdrBtn.addEventListener('click', () => {
+            state.hdr = !state.hdr;
+            el.hdrBtn.classList.toggle('active', state.hdr);
+            showToast(`HDR: ${state.hdr ? 'On' : 'Off'}`);
+        });
+
+        // Switch camera
+        el.switchCamBtn.addEventListener('click', () => {
+            state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+            el.switchCamBtn.classList.toggle('flipped');
+            if (state.cameraActive) startCamera();
+            showToast(state.facingMode === 'user' ? 'Front camera' : 'Back camera');
+        });
+
+        // Zoom
+        document.querySelectorAll('.zoom-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.zoom-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.zoom = parseFloat(btn.dataset.zoom);
+                showToast(`Zoom: ${btn.textContent}`);
+            });
+        });
+
+        // Mode selector
+        document.querySelectorAll('.mode-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.mode-item').forEach(m => m.classList.remove('active'));
+                item.classList.add('active');
+                state.mode = item.dataset.mode;
+                updateModeUI();
+            });
+        });
+
+        function updateModeUI() {
+            if (state.mode === 'video') {
+                el.shutterBtn.classList.add('video-mode');
+            } else {
+                el.shutterBtn.classList.remove('video-mode');
+                el.shutterBtn.classList.remove('recording');
+                stopRecording();
+            }
+        }
+
+        // Shutter
+        el.shutterBtn.addEventListener('click', () => {
+            if (state.mode === 'video') {
+                if (state.recording) {
+                    stopRecording();
+                } else {
+                    startRecording();
+                }
+                return;
+            }
+
+            if (state.timer > 0) {
+                showToast(`Taking photo in ${state.timer}s...`);
+                let count = state.timer;
+                const interval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        showToast(`${count}...`);
+                    } else {
+                        clearInterval(interval);
+                        capturePhoto();
+                    }
+                }, 1000);
+            } else {
+                capturePhoto();
+            }
+        });
+
+        function capturePhoto() {
+            // Flash animation
+            if (state.flash === 'on' || (state.flash === 'auto')) {
+                el.flashOverlay.classList.remove('flash');
+                void el.flashOverlay.offsetWidth;
+                el.flashOverlay.classList.add('flash');
+            }
+
+            // Capture frame
+            const canvas = el.capturedCanvas;
+            const ctx = canvas.getContext('2d');
+            
+            if (state.cameraActive) {
+                canvas.width = el.video.videoWidth;
+                canvas.height = el.video.videoHeight;
+                ctx.drawImage(el.video, 0, 0);
+            } else {
+                // Generate a fake pretty photo
+                canvas.width = 1080;
+                canvas.height = 1440;
+                generateArtPhoto(ctx, canvas.width, canvas.height);
+            }
+
+            // Add to captured
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            state.capturedImages.push(dataUrl);
+            updateThumbnail(dataUrl);
+
+            // Shutter animation
+            el.shutterBtn.style.transform = 'scale(0.9)';
+            setTimeout(() => el.shutterBtn.style.transform = '', 150);
+
+            showToast('Photo captured!');
+        }
+
+        function generateArtPhoto(ctx, w, h) {
+            const palettes = [
+                ['#6750A4', '#EADDFF', '#D0BCFE', '#21005D', '#381E72'],
+                ['#7F67BE', '#CDB4DB', '#FFC8DD', '#FFAFCC', '#BDE0FE'],
+                ['#4A3F6B', '#9B5DE5', '#F15BB5', '#FEE440', '#00BBF9'],
+                ['#2D1B69', '#5B2C6F', '#8E44AD', '#BB8FCE', '#D7BDE2']
+            ];
+            const palette = palettes[Math.floor(Math.random() * palettes.length)];
+            
+            // Gradient background
+            const grad = ctx.createLinearGradient(0, 0, w, h);
+            grad.addColorStop(0, palette[0]);
+            grad.addColorStop(0.5, palette[1]);
+            grad.addColorStop(1, palette[2]);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+
+            // Random circles
+            for (let i = 0; i < 8; i++) {
+                ctx.beginPath();
+                const x = Math.random() * w;
+                const y = Math.random() * h;
+                const r = 50 + Math.random() * 200;
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fillStyle = palette[Math.floor(Math.random() * palette.length)] + '44';
+                ctx.fill();
+            }
+
+            // Some organic shapes
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                const cx = Math.random() * w;
+                const cy = Math.random() * h;
+                ctx.moveTo(cx, cy);
+                for (let j = 0; j < 6; j++) {
+                    const cp1x = cx + (Math.random() - 0.5) * 300;
+                    const cp1y = cy + (Math.random() - 0.5) * 300;
+                    const cp2x = cx + (Math.random() - 0.5) * 300;
+                    const cp2y = cy + (Math.random() - 0.5) * 300;
+                    const ex = cx + (Math.random() - 0.5) * 200;
+                    const ey = cy + (Math.random() - 0.5) * 200;
+                    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, ex, ey);
+                }
+                ctx.closePath();
+                ctx.fillStyle = palette[Math.floor(Math.random() * palette.length)] + '33';
+                ctx.fill();
+            }
+
+            // Vignette
+            const vignette = ctx.createRadialGradient(w/2, h/2, w*0.3, w/2, h/2, w*0.8);
+            vignette.addColorStop(0, 'transparent');
+            vignette.addColorStop(1, 'rgba(0,0,0,0.4)');
+            ctx.fillStyle = vignette;
+            ctx.fillRect(0, 0, w, h);
+
+            // Date stamp
+            const now = new Date();
+            ctx.font = '500 28px "Google Sans", sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.textAlign = 'right';
+            ctx.fillText(now.toLocaleDateString(), w - 40, h - 40);
+        }
+
+        function updateThumbnail(dataUrl) {
+            el.thumbnailPreview.innerHTML = `<img src="${dataUrl}" alt="Last photo">`;
+        }
+
+        // Recording
+        function startRecording() {
+            state.recording = true;
+            state.recordStartTime = Date.now();
+            el.shutterBtn.classList.remove('video-mode');
+            el.shutterBtn.classList.add('recording');
+            el.recordingTimer.classList.add('show');
+            state.recordInterval = setInterval(updateRecordTime, 100);
+        }
+
+        function stopRecording() {
+            state.recording = false;
+            el.shutterBtn.classList.remove('recording');
+            if (state.mode === 'video') el.shutterBtn.classList.add('video-mode');
+            el.recordingTimer.classList.remove('show');
+            clearInterval(state.recordInterval);
+            el.recTime.textContent = '00:00';
+            if (state.recordStartTime) showToast('Video saved!');
+            state.recordStartTime = null;
+        }
+
+        function updateRecordTime() {
+            if (!state.recordStartTime) return;
+            const elapsed = Date.now() - state.recordStartTime;
+            const mins = Math.floor(elapsed / 60000);
+            const secs = Math.floor((elapsed % 60000) / 1000);
+            el.recTime.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        // Thumbnail click
+        el.thumbnailPreview.addEventListener('click', () => {
+            if (state.capturedImages.length === 0) {
+                showToast('No photos yet');
+                return;
+            }
+            const last = state.capturedImages[state.capturedImages.length - 1];
+            const canvas = el.capturedCanvas;
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                el.capturedPreview.classList.add('show');
+            };
+            img.src = last;
+        });
+
+        // Preview controls
+        el.previewBack.addEventListener('click', () => {
+            el.capturedPreview.classList.remove('show');
+        });
+
+        el.deleteBtn.addEventListener('click', () => {
+            state.capturedImages.pop();
+            if (state.capturedImages.length > 0) {
+                updateThumbnail(state.capturedImages[state.capturedImages.length - 1]);
+            } else {
+                el.thumbnailPreview.innerHTML = '<span class="material-symbols-outlined filled">image</span>';
+            }
+            el.capturedPreview.classList.remove('show');
+            showToast('Photo deleted');
+        });
+
+        el.downloadBtn.addEventListener('click', () => {
+            const canvas = el.capturedCanvas;
+            const link = document.createElement('a');
+            link.download = `camera_${Date.now()}.jpg`;
+            link.href = canvas.toDataURL('image/jpeg', 0.95);
+            link.click();
+            showToast('Photo saved!');
+        });
+
+        el.shareBtn.addEventListener('click', async () => {
+            if (navigator.share) {
+                try {
+                    const canvas = el.capturedCanvas;
+                    canvas.toBlob(async (blob) => {
+                        const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+                        await navigator.share({ files: [file], title: 'Photo' });
+                    }, 'image/jpeg');
+                } catch (e) {
+                    showToast('Share cancelled');
+                }
+            } else {
+                showToast('Share not supported');
+            }
+        });
+
+        // Settings
+        el.settingsBtn.addEventListener('click', () => {
+            el.settingsPanel.classList.add('show');
+        });
+
+        el.settingsPanel.addEventListener('click', (e) => {
+            if (e.target === el.settingsPanel) {
+                el.settingsPanel.classList.remove('show');
+            }
+        });
+
+        el.gridToggle.addEventListener('click', () => {
+            state.grid = !state.grid;
+            el.gridSwitch.classList.toggle('on', state.grid);
+            el.gridOverlay.classList.toggle('show', state.grid);
+        });
+
+        el.levelToggle.addEventListener('click', () => {
+            state.level = !state.level;
+            el.levelSwitch.classList.toggle('on', state.level);
+            el.levelIndicator.classList.toggle('show', state.level);
+        });
+
+        el.closeBtn.addEventListener('click', () => {
+            showToast('Camera closed');
+        });
+
+        // Level indicator with device orientation
+        if (window.DeviceOrientationEvent) {
+            window.addEventListener('deviceorientation', (e) => {
+                if (!state.level) return;
+                const gamma = e.gamma || 0;
+                el.levelLine.style.transform = `rotate(${gamma}deg)`;
+                el.levelLine.classList.toggle('level', Math.abs(gamma) < 2);
+            });
+        }
+
+        // Swipe mode selector
+        let touchStartX = 0;
+        el.modeSelector.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        }, { passive: true });
+
+        el.modeSelector.addEventListener('touchend', (e) => {
+            const diff = e.changedTouches[0].clientX - touchStartX;
+            const modes = ['night', 'portrait', 'photo', 'video'];
+            const currentIdx = modes.indexOf(state.mode);
+
+            if (Math.abs(diff) > 50) {
+                let newIdx;
+                if (diff < 0 && currentIdx < modes.length - 1) {
+                    newIdx = currentIdx + 1;
+                } else if (diff > 0 && currentIdx > 0) {
+                    newIdx = currentIdx - 1;
+                }
+                if (newIdx !== undefined) {
+                    document.querySelectorAll('.mode-item').forEach(m => m.classList.remove('active'));
+                    document.querySelector(`[data-mode="${modes[newIdx]}"]`).classList.add('active');
+                    state.mode = modes[newIdx];
+                    updateModeUI();
+                }
+            }
+        }, { passive: true });
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault();
+                el.shutterBtn.click();
+            }
+        });
+
+        // Init
+        startCamera();
+    </script>
+</body>
+</html>
