@@ -52,7 +52,7 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 9999;
+  z-index: 10000; /* Increased z-index to ensure it's on top */
   transition: opacity 1s ease-out;
   pointer-events: all; /* Ensure it blocks interaction */
 }
@@ -77,12 +77,8 @@ body {
 
 /* =========================
    A-Frame Overrides / Custom Styling for Enter VR button
-   A-Frame inserts a default 'Enter VR' button. We can customize or hide it.
-   For this example, we'll let A-Frame's button handle the VR entry,
-   but we'll make sure our custom loading screen clears first.
 ========================= */
 .a-enter-vr-button {
-    /* Style A-Frame's default button if needed, or hide it if you want to use your own */
     background-color: white !important;
     color: black !important;
     border-radius: 22px !important;
@@ -94,6 +90,7 @@ body {
     left: 50% !important;
     transform: translateX(-50%) !important;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+    z-index: 9999; /* Ensure button is above other elements but below loading screen */
 }
 .a-enter-vr-button::before {
     content: none !important; /* Remove A-Frame's default VR icon */
@@ -103,7 +100,6 @@ body {
 .a-loader-title, .a-loader-spinner {
     display: none !important;
 }
-
 
 </style>
 </head>
@@ -116,14 +112,27 @@ body {
 </div>
 
 <!-- A-Frame Scene -->
-<a-scene embedded vr-mode-ui="enabled: true">
-  <!-- Sky: The 360-degree panoramic image -->
-  <a-sky src="https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png" rotation="0 -90 0"></a-sky>
+<!-- Added background attribute to a-scene for a fallback color -->
+<a-scene embedded vr-mode-ui="enabled: true" background="color: #111827">
 
-  <!-- Camera: This is what the user sees through -->
-  <!-- A-Frame automatically provides gyroscope control for the camera -->
-  <!-- The `look-controls` component enables this. `wasd-controls` for desktop movement. -->
-  <a-entity camera look-controls wasd-controls position="0 1.6 0">
+  <!-- Assets Management: Preload images for better reliability -->
+  <a-assets>
+    <img id="pano-img" src="https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png" crossOrigin="anonymous">
+    <!-- crossOrigin="anonymous" is crucial if your image is hosted on a different domain
+         and you encounter CORS issues, which can prevent it from rendering. -->
+  </a-assets>
+
+  <!-- Sky: The 360-degree panoramic image, now referencing the preloaded asset -->
+  <!-- Ensure the src references the ID from a-assets, not the direct URL again -->
+  <a-sky src="#pano-img" rotation="0 -90 0"></a-sky>
+
+  <!-- Camera: Explicitly define camera properties -->
+  <!-- Added active="true" to ensure this is the main camera -->
+  <!-- Using wasd-controls-enabled and look-controls-enabled to explicitly control them -->
+  <a-entity camera="active: true" 
+            look-controls="enabled: true" 
+            wasd-controls="enabled: false" 
+            position="0 1.6 0">
     <!-- Optional: Add a cursor for interaction, though not strictly needed for just viewing -->
     <a-cursor fuse="true" color="#FFF"></a-cursor>
   </a-entity>
@@ -134,8 +143,11 @@ body {
 async function keepScreenAwake(){
   try {
     if("wakeLock" in navigator){
-      await navigator.wakeLock.request("screen");
+      const wakeLock = await navigator.wakeLock.request("screen");
       console.log("Screen wake lock activated.");
+      wakeLock.addEventListener('release', () => {
+        console.log('Wake Lock was released');
+      });
     } else {
       console.warn("Wake Lock API not supported.");
     }
@@ -149,25 +161,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const scene = document.querySelector('a-scene');
     const loadingScreen = document.getElementById('loadingScreen');
 
-    if (scene.hasLoaded) {
-        // If A-Frame scene is already loaded (e.g., from cache)
+    const fadeOutLoading = () => {
         loadingScreen.classList.add('fade-out');
+        // Initiate wake lock after scene is loaded and visible
+        keepScreenAwake();
+        console.log("A-Frame scene loaded and custom loading screen faded.");
+    };
+
+    if (scene.hasLoaded) {
+        // If A-Frame scene is already loaded (e.g., from cache or very fast load)
+        console.log("A-Frame scene already loaded (hasLoaded=true).");
+        fadeOutLoading();
     } else {
-        // Wait for A-Frame scene to fully load
+        // Wait for A-Frame scene to fully load all assets
         scene.addEventListener('loaded', () => {
             // Give a small delay before fading out to ensure everything is rendered
-            setTimeout(() => {
-                loadingScreen.classList.add('fade-out');
-                // Initiate wake lock after scene is loaded and visible
-                keepScreenAwake();
-            }, 500); 
+            console.log("A-Frame 'loaded' event fired.");
+            setTimeout(fadeOutLoading, 500); 
         });
+
+        // Fallback in case 'loaded' event doesn't fire as expected or is delayed
+        // This is a safety net; typically, 'loaded' should be reliable.
+        setTimeout(() => {
+            if (!scene.hasLoaded && !loadingScreen.classList.contains('fade-out')) {
+                console.warn("A-Frame 'loaded' event not fired after a delay. Forcing loading screen fade out.");
+                fadeOutLoading();
+            }
+        }, 5000); // 5-second fallback
     }
 
     // Optional: Log A-Frame's VR mode changes
     scene.addEventListener('enter-vr', () => {
         console.log('Entered VR mode!');
         // When entering VR, A-Frame handles fullscreen and landscape lock automatically.
+        // It also requests DeviceOrientation permission if needed.
     });
     scene.addEventListener('exit-vr', () => {
         console.log('Exited VR mode!');
