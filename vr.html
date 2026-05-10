@@ -13,228 +13,97 @@
   "
 >
 
-<title>Omni360 VR</title>
+<title>Omni360 A-Frame VR</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
+<!-- A-Frame Library -->
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
 <style>
 
-*{
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
-  -webkit-tap-highlight-color:transparent;
+/* Basic resets and font */
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  background-color: black; /* Ensure background is black while loading */
 }
 
-html,
-body{
-  width:100%;
-  height:100%;
-  overflow:hidden;
-  background:black;
-  font-family:'Inter',sans-serif;
-  touch-action:none;
-}
-
-/* =========================
-   FORCE LANDSCAPE
-========================= */
-
-@media screen and (orientation:portrait){
-  body::before{
-    content:"Rotate Your Phone";
-    position:fixed;
-    inset:0;
-    background:black;
-    color:white;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    text-align:center;
-    z-index:999999;
-    font-size:2rem;
-    font-weight:800;
-    padding:30px;
-  }
+/* Make A-Frame canvas fill the entire screen */
+.a-canvas {
+  width: 100vw !important;
+  height: 100vh !important;
+  display: block;
 }
 
 /* =========================
-   LOADING
+   LOADING (Optional: A-Frame has its own built-in loader, but this provides a custom one)
 ========================= */
 
-#loadingScreen{
-  position:fixed;
-  inset:0;
-  background:black;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  z-index:9999;
-  transition:1s;
+#loadingScreen {
+  position: fixed;
+  inset: 0;
+  background: black;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  transition: opacity 1s ease-out;
+  pointer-events: all; /* Ensure it blocks interaction */
 }
 
-.loading-text{
-  color:white;
-  font-size:2.2rem;
-  font-weight:800;
-  animation:pulse 1.6s infinite;
+.loading-text {
+  color: white;
+  font-size: 2.2rem;
+  font-weight: 800;
+  animation: pulse 1.6s infinite;
 }
 
-@keyframes pulse{
-  0%{ opacity:0.4; }
-  50%{ opacity:1; }
-  100%{ opacity:0.4; }
+@keyframes pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
+}
+
+#loadingScreen.fade-out {
+  opacity: 0;
+  pointer-events: none; /* Allow interaction once faded */
 }
 
 /* =========================
-   ENTER SCREEN
+   A-Frame Overrides / Custom Styling for Enter VR button
+   A-Frame inserts a default 'Enter VR' button. We can customize or hide it.
+   For this example, we'll let A-Frame's button handle the VR entry,
+   but we'll make sure our custom loading screen clears first.
 ========================= */
-
-#enterScreen{
-  position:fixed;
-  inset:0;
-  background:black;
-  display:none;
-  justify-content:center;
-  align-items:center;
-  z-index:9000;
-  padding:30px;
+.a-enter-vr-button {
+    /* Style A-Frame's default button if needed, or hide it if you want to use your own */
+    background-color: white !important;
+    color: black !important;
+    border-radius: 22px !important;
+    font-size: 1.2rem !important;
+    font-weight: 800 !important;
+    padding: 15px 45px !important;
+    border: none !important;
+    bottom: 20px !important; /* Adjust position */
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+}
+.a-enter-vr-button::before {
+    content: none !important; /* Remove A-Frame's default VR icon */
 }
 
-.enter-box{
-  text-align:center;
-  color:white;
-  max-width:700px;
+/* Hide A-Frame's native loader since we have a custom one */
+.a-loader-title, .a-loader-spinner {
+    display: none !important;
 }
 
-.enter-title{
-  font-size:3rem;
-  font-weight:800;
-  margin-bottom:20px;
-}
-
-.enter-sub{
-  font-size:1.2rem;
-  opacity:0.75;
-  line-height:1.7;
-  margin-bottom:35px;
-}
-
-.enter-btn{
-  border:none;
-  outline:none;
-  background:white;
-  color:black;
-  padding:20px 55px;
-  border-radius:22px;
-  font-size:1.2rem;
-  font-weight:800;
-  font-family:'Inter',sans-serif;
-  cursor:pointer;
-}
-
-/* =========================
-   VR
-========================= */
-
-#vrContainer{
-  position:fixed;
-  inset:0;
-  display:none;
-  background:black;
-}
-
-/* FULL SPLIT */
-.eye{
-  position:absolute;
-  top:0;
-  width:50%;
-  height:100%;
-  overflow:hidden;
-  background:black;
-}
-
-.left-eye{ left:0; }
-.right-eye{ right:0; }
-
-/* VIEW */
-.view{
-  position:absolute;
-  inset:0;
-  overflow:hidden;
-}
-
-/* TRUE 360 SPHERE WRAPPER */
-.panorama{
-  position:absolute;
-  /* 
-    Using percentage-based width forces the browser to render a huge tile.
-    We only shift background-position now to simulate true 360 rotation.
-  */
-  width: 300%;
-  height: 160%;
-  top: -30%;
-  left: -100%; /* Important: This ensures the center of the 300% wide image is initially visible */
-
-  background-image:url('https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png');
-  background-size: cover;
-  background-repeat: repeat-x;
-  will-change:transform;
-}
-
-/* CENTER LINE */
-.center-line{
-  position:fixed;
-  top:0;
-  left:50%;
-  width:2px;
-  height:100%;
-  background:rgba(255,255,255,0.15);
-  z-index:1000;
-}
-
-/* CROSSHAIR */
-.crosshair{
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:18px;
-  height:18px;
-  border:2px solid white;
-  border-radius:50%;
-  transform:translate(-50%,-50%);
-  z-index:100;
-}
-
-.crosshair::before{
-  content:"";
-  position:absolute;
-  width:20px;
-  height:2px;
-  background:white;
-  top:50%;
-  left:-10px;
-  transform:translateY(-50%);
-}
-
-.crosshair::after{
-  content:"";
-  position:absolute;
-  width:2px;
-  height:20px;
-  background:white;
-  left:50%;
-  top:-10px;
-  transform:translateX(-50%);
-}
-
-/* =========================
-   FADE
-========================= */
-.fade-out{ opacity:0; }
 
 </style>
 </head>
@@ -243,319 +112,30 @@ body{
 
 <!-- LOADING -->
 <div id="loadingScreen">
-  <div class="loading-text">Loading VR</div>
+  <div class="loading-text">Loading VR Experience</div>
 </div>
 
-<!-- ENTER -->
-<div id="enterScreen">
-  <div class="enter-box">
-    <div class="enter-title">Place Your Phone<br>Inside The VR Box</div>
-    <div class="enter-sub">Put it on your head and press the button below to enter VR mode.</div>
-    <button class="enter-btn" id="enterVrBtn">Enter VR</button>
-  </div>
-</div>
+<!-- A-Frame Scene -->
+<a-scene embedded vr-mode-ui="enabled: true">
+  <!-- Sky: The 360-degree panoramic image -->
+  <a-sky src="https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png" rotation="0 -90 0"></a-sky>
 
-<!-- VR -->
-<div id="vrContainer">
-  <div class="center-line"></div>
-  
-  <!-- LEFT -->
-  <div class="eye left-eye">
-    <div class="view">
-      <div class="panorama" id="leftPano"></div>
-    </div>
-    <div class="crosshair"></div>
-  </div>
-
-  <!-- RIGHT -->
-  <div class="eye right-eye">
-    <div class="view">
-      <div class="panorama" id="rightPano"></div>
-    </div>
-    <div class="crosshair"></div>
-  </div>
-</div>
+  <!-- Camera: This is what the user sees through -->
+  <!-- A-Frame automatically provides gyroscope control for the camera -->
+  <!-- The `look-controls` component enables this. `wasd-controls` for desktop movement. -->
+  <a-entity camera look-controls wasd-controls position="0 1.6 0">
+    <!-- Optional: Add a cursor for interaction, though not strictly needed for just viewing -->
+    <a-cursor fuse="true" color="#FFF"></a-cursor>
+  </a-entity>
+</a-scene>
 
 <script>
-
-/* =========================
-   CHECK STORAGE
-========================= */
-const userData = localStorage.getItem("omni360UserData");
-if(!userData){
-  // Redirect to index.html if user data is not found.
-  // This line might need to be removed or adjusted based on your application flow.
-  // For testing this VR viewer alone, you might want to comment it out.
-  // window.location.href = "index.html"; 
-}
-
-/* =========================
-   IMAGE & CACHE
-========================= */
-const vrImage = "https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png";
-
-caches.open("omni360-vr-cache").then(cache => {
-  cache.add(vrImage).catch(e => console.log("Cache skip"));
-});
-
-/* =========================
-   LOAD
-========================= */
-const img = new Image();
-img.src = vrImage;
-
-img.onload = () => {
-  setTimeout(() => {
-    const loading = document.getElementById("loadingScreen");
-    loading.classList.add("fade-out");
-    setTimeout(() => {
-      loading.style.display = "none";
-      startEnterScreen();
-    }, 1000);
-  }, 1200);
-};
-
-img.onerror = () => {
-  // Fallback just in case image is blocked
-  console.error("VR image failed to load, proceeding to enter screen.");
-  startEnterScreen();
-};
-
-/* =========================
-   ENTER SCREEN
-========================= */
-function startEnterScreen(){
-  document.getElementById("enterScreen").style.display = "flex";
-  document.getElementById("enterVrBtn").onclick = () => {
-    enterVR();
-  };
-}
-
-/* =========================
-   ENTER VR
-========================= */
-function enterVR(){
-  const enter = document.getElementById("enterScreen");
-  enter.classList.add("fade-out");
-  
-  setTimeout(() => {
-    enter.style.display = "none";
-    document.getElementById("vrContainer").style.display = "block";
-    
-    lockLandscape();
-    enterFullscreen();
-    keepScreenAwake();
-    startGyroscope();
-  }, 1000);
-}
-
-/* =========================
-   PANOS
-========================= */
-const leftPano = document.getElementById("leftPano");
-const rightPano = document.getElementById("rightPano");
-
-/* =========================
-   SMOOTHING & MATH STATE
-========================= */
-let smoothYaw = 0;
-let smoothPitch = 0;
-let smoothRoll = 0;
-let isFirstReading = true;
-
-// Helper to find shortest path around a circle
-function getAngleDelta(current, target) {
-  let delta = target - current;
-  // If the difference is larger than 180, go the other way around
-  while (delta > 180) delta -= 360;
-  while (delta < -180) delta += 360;
-  return delta;
-}
-
-/* =========================
-   GYRO
-========================= */
-function startGyroscope(){
-  if (typeof DeviceOrientationEvent !== "undefined" && 
-      typeof DeviceOrientationEvent.requestPermission === "function") {
-    DeviceOrientationEvent.requestPermission().then(permission => {
-      if (permission === "granted") {
-        console.log("DeviceOrientationEvent permission granted.");
-        setupOrientation();
-      } else {
-        console.warn("DeviceOrientationEvent permission denied.");
-        setupOrientation(); // Try anyway, as some browsers might still provide data
-      }
-    }).catch(err => {
-      console.error("Error requesting Gyro permission:", err);
-      setupOrientation(); // Try anyway
-    });
-  } else {
-    console.log("DeviceOrientationEvent.requestPermission not supported, attempting to setup orientation directly.");
-    setupOrientation();
-  }
-}
-
-/* =========================
-   SENSOR
-========================= */
-function setupOrientation(){
-  window.addEventListener("deviceorientation", (event) => {
-    
-    // Default to 0 if event property is null/undefined to prevent errors
-    const alpha = event.alpha || 0; // Z-axis (compass heading)
-    const beta = event.beta || 0;   // X-axis (front-back tilt)
-    const gamma = event.gamma || 0; // Y-axis (left-right tilt)
-
-    // Set baseline instantly on first read to prevent wild spinning on load
-    if (isFirstReading) {
-      smoothYaw = alpha;
-      smoothPitch = beta;
-      smoothRoll = gamma;
-      isFirstReading = false;
-      return;
-    }
-
-    // Calculate true shortest-path delta (Fixes the 360° snap bug)
-    const deltaYaw = getAngleDelta(smoothYaw, alpha);
-    const deltaPitch = getAngleDelta(smoothPitch, beta);
-    const deltaRoll = getAngleDelta(smoothRoll, gamma);
-
-    // Apply smoothing to the deltas
-    // Adjust smoothing factor (0.08) for responsiveness vs. stability
-    smoothYaw += deltaYaw * 0.08;   
-    smoothPitch += deltaPitch * 0.08;
-    smoothRoll += deltaRoll * 0.08;
-
-    // Keep yaw strictly within 0-360 for background math
-    if (smoothYaw < 0) smoothYaw += 360;
-    if (smoothYaw >= 360) smoothYaw -= 360;
-
-    renderVR();
-
-  }, true);
-}
-
-/* =========================
-   RENDER
-========================= */
-function renderVR() {
-
-  /* 
-    1. TRUE 360 BACKGROUND SHIFT (YAW)
-    We map the 0-360 Yaw directly to background-position percentage.
-    Because the element is 300% wide and repeats in X, this creates a 
-    flawless infinite horizontal loop without black edges.
-    A positive yaw (rotating right) should move the background to the left (negative background-position).
-    The current panorama setup uses `left: -100%;` and `background-repeat: repeat-x;`.
-    A `background-position` of `0%` shows the middle segment of the 300% image.
-    If smoothYaw increases, we want the background to shift negatively to simulate moving right.
-    So, `bgX` should be `-(smoothYaw / 360) * 100`.
-    
-    However, the original CSS with `left: -100%` and `background-position: `${bgX}% center`
-    where bgX is positive already implies that as `smoothYaw` increases (device rotates right),
-    `bgX` increases, which shifts the *background image* to the right within its container.
-    Since the panorama itself is `left: -100%`, shifting the background right effectively makes the
-    viewed portion of the panorama move left, which is visually correct for a right turn.
-    Let's stick to the original `bgX` calculation and the `left: -100%` on panorama.
-  */
-  const bgX = (smoothYaw / 360) * 100;
-
-  leftPano.style.backgroundPosition = `${bgX}% center`;
-  rightPano.style.backgroundPosition = `${bgX}% center`;
-
-
-  /* 
-    2. SPHERICAL PITCH & ROLL BOWING
-    Real VR headsets bow the image up/down based on pitch and tilt based on roll. 
-    We use trigonometry to simulate the lens curvature and rotation.
-  */
-  const pitchRad = smoothPitch * (Math.PI / 180); // Convert pitch to radians for sin function
-  // smoothRoll is already in degrees for CSS transform, no need for rollRad for rotation
-
-  // Push image vertically to simulate looking up/down (Pitch)
-  // A positive pitch (looking up) should move the image down visually.
-  // `sin(pitchRad)` will be positive when `pitchRad` is positive (looking up).
-  // Multiplying by a negative value will move the image up, which is correct for looking down.
-  // So, if looking up (positive pitch), `sin(pitchRad)` is positive, `-45` will push `moveY` negative.
-  // This means the image moves UP, making it look like you're looking DOWN.
-  // If you want looking UP to move the image DOWN, you need to reverse the sign of the multiplier.
-  // Let's assume looking up (positive pitch) should translate to the content moving down on screen,
-  // making the horizon appear to drop.
-  const moveY = Math.sin(pitchRad) * 45; // Changed to positive 45 for more intuitive up/down movement
-
-  // Slight scale increase when looking far up/down to hide edges (Lens curve effect)
-  const scaleCurve = 1.15 + (Math.abs(smoothPitch) * 0.001); 
-
-  // Roll (Tilting head left/right)
-  // `smoothRoll` is already in degrees, so we use it directly or with a multiplier.
-  // A positive roll (tilting right) should rotate the image clockwise.
-  const rollDeg = smoothRoll * 0.8; // Adjusted multiplier for roll sensitivity
-
-  const transform = `
-    translateY(${moveY}px)
-    rotate(${rollDeg}deg)
-    scale(${scaleCurve})
-  `;
-
-  leftPano.style.transform = transform;
-  rightPano.style.transform = transform;
-}
-
-/* =========================
-   LANDSCAPE LOCK
-========================= */
-async function lockLandscape(){
-  try {
-    if (screen.orientation && screen.orientation.lock) {
-      await screen.orientation.lock("landscape");
-      console.log("Screen orientation locked to landscape.");
-    } else {
-      console.warn("Screen orientation lock not supported.");
-    }
-  } catch(e) {
-    console.error("Error locking screen orientation:", e);
-  }
-}
-
-/* =========================
-   FULLSCREEN
-========================= */
-async function enterFullscreen(){
-  const el = document.documentElement;
-  try {
-    if(el.requestFullscreen) {
-      await el.requestFullscreen();
-      console.log("Entered fullscreen mode.");
-    }
-    else if(el.webkitRequestFullscreen) {
-      await el.webkitRequestFullscreen();
-      console.log("Entered webkit fullscreen mode.");
-    }
-    else if(el.msRequestFullscreen) {
-      await el.msRequestFullscreen();
-      console.log("Entered ms fullscreen mode.");
-    }
-    else {
-      console.warn("Fullscreen API not supported.");
-    }
-  } catch(e) {
-    console.error("Error entering fullscreen:", e);
-  }
-}
-
-/* =========================
-   WAKE LOCK
-========================= */
+// Keep screen awake (Wake Lock API)
 async function keepScreenAwake(){
   try {
     if("wakeLock" in navigator){
-      const wakeLock = await navigator.wakeLock.request("screen");
+      await navigator.wakeLock.request("screen");
       console.log("Screen wake lock activated.");
-      // Optional: Add an event listener to re-acquire wake lock if it's released
-      wakeLock.addEventListener('release', () => {
-        console.log('Wake Lock was released');
-      });
     } else {
       console.warn("Wake Lock API not supported.");
     }
@@ -564,6 +144,35 @@ async function keepScreenAwake(){
   }
 }
 
+// Fade out custom loading screen once A-Frame is ready
+document.addEventListener('DOMContentLoaded', () => {
+    const scene = document.querySelector('a-scene');
+    const loadingScreen = document.getElementById('loadingScreen');
+
+    if (scene.hasLoaded) {
+        // If A-Frame scene is already loaded (e.g., from cache)
+        loadingScreen.classList.add('fade-out');
+    } else {
+        // Wait for A-Frame scene to fully load
+        scene.addEventListener('loaded', () => {
+            // Give a small delay before fading out to ensure everything is rendered
+            setTimeout(() => {
+                loadingScreen.classList.add('fade-out');
+                // Initiate wake lock after scene is loaded and visible
+                keepScreenAwake();
+            }, 500); 
+        });
+    }
+
+    // Optional: Log A-Frame's VR mode changes
+    scene.addEventListener('enter-vr', () => {
+        console.log('Entered VR mode!');
+        // When entering VR, A-Frame handles fullscreen and landscape lock automatically.
+    });
+    scene.addEventListener('exit-vr', () => {
+        console.log('Exited VR mode!');
+    });
+});
 </script>
 
 </body>
