@@ -3,7 +3,6 @@
 <head>
 
 <meta charset="UTF-8">
-
 <meta
   name="viewport"
   content="
@@ -32,16 +31,11 @@
 
 html,
 body{
-
   width:100%;
   height:100%;
-
   overflow:hidden;
-
   background:black;
-
   font-family:'Inter',sans-serif;
-
   touch-action:none;
 }
 
@@ -50,33 +44,19 @@ body{
 ========================= */
 
 @media screen and (orientation:portrait){
-
   body::before{
-
     content:"Rotate Your Phone";
-
     position:fixed;
-
     inset:0;
-
     background:black;
-
     color:white;
-
     display:flex;
-
     justify-content:center;
-
     align-items:center;
-
     text-align:center;
-
     z-index:999999;
-
     font-size:2rem;
-
     font-weight:800;
-
     padding:30px;
   }
 }
@@ -86,48 +66,27 @@ body{
 ========================= */
 
 #loadingScreen{
-
   position:fixed;
-
   inset:0;
-
   background:black;
-
   display:flex;
-
   justify-content:center;
-
   align-items:center;
-
   z-index:9999;
-
   transition:1s;
 }
 
 .loading-text{
-
   color:white;
-
   font-size:2.2rem;
-
   font-weight:800;
-
   animation:pulse 1.6s infinite;
 }
 
 @keyframes pulse{
-
-  0%{
-    opacity:0.4;
-  }
-
-  50%{
-    opacity:1;
-  }
-
-  100%{
-    opacity:0.4;
-  }
+  0%{ opacity:0.4; }
+  50%{ opacity:1; }
+  100%{ opacity:0.4; }
 }
 
 /* =========================
@@ -135,72 +94,46 @@ body{
 ========================= */
 
 #enterScreen{
-
   position:fixed;
-
   inset:0;
-
   background:black;
-
   display:none;
-
   justify-content:center;
-
   align-items:center;
-
   z-index:9000;
-
   padding:30px;
 }
 
 .enter-box{
-
   text-align:center;
-
   color:white;
-
   max-width:700px;
 }
 
 .enter-title{
-
   font-size:3rem;
-
   font-weight:800;
-
   margin-bottom:20px;
 }
 
 .enter-sub{
-
   font-size:1.2rem;
-
   opacity:0.75;
-
   line-height:1.7;
-
   margin-bottom:35px;
 }
 
 .enter-btn{
-
   border:none;
-
   outline:none;
-
   background:white;
-
   color:black;
-
   padding:20px 55px;
-
   border-radius:22px;
-
   font-size:1.2rem;
-
   font-weight:800;
-
   font-family:'Inter',sans-serif;
+  cursor:pointer;
 }
 
 /* =========================
@@ -208,160 +141,100 @@ body{
 ========================= */
 
 #vrContainer{
-
   position:fixed;
-
   inset:0;
-
   display:none;
-
   background:black;
 }
 
 /* FULL SPLIT */
-
 .eye{
-
   position:absolute;
-
   top:0;
-
   width:50%;
-
   height:100%;
-
   overflow:hidden;
-
   background:black;
 }
 
-.left-eye{
-  left:0;
-}
-
-.right-eye{
-  right:0;
-}
+.left-eye{ left:0; }
+.right-eye{ right:0; }
 
 /* VIEW */
-
 .view{
-
   position:absolute;
-
   inset:0;
-
   overflow:hidden;
 }
 
-/* HUGE 360 IMAGE */
-
+/* TRUE 360 SPHERE WRAPPER */
 .panorama{
-
   position:absolute;
+  /* 
+    Using percentage-based width forces the browser to render a huge tile.
+    We only shift background-position now to simulate true 360 rotation.
+  */
+  width: 300%;
+  height: 160%;
+  top: -30%;
+  left: -100%;
 
-  width:320%;
-  height:220%;
-
-  left:-110%;
-  top:-60%;
-
-  background-image:url(
-    'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png'
-  );
-
-  background-size:cover;
-
-  background-repeat:no-repeat;
-
-  background-position:center;
-
+  background-image:url('https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png');
+  background-size: cover;
+  background-repeat: repeat-x;
   will-change:transform;
-
-  transform-style:preserve-3d;
 }
 
 /* CENTER LINE */
-
 .center-line{
-
   position:fixed;
-
   top:0;
-
   left:50%;
-
   width:2px;
-
   height:100%;
-
   background:rgba(255,255,255,0.15);
-
   z-index:1000;
 }
 
 /* CROSSHAIR */
-
 .crosshair{
-
   position:absolute;
-
   left:50%;
   top:50%;
-
   width:18px;
   height:18px;
-
   border:2px solid white;
-
   border-radius:50%;
-
   transform:translate(-50%,-50%);
-
   z-index:100;
 }
 
 .crosshair::before{
-
   content:"";
-
   position:absolute;
-
   width:20px;
   height:2px;
-
   background:white;
-
   top:50%;
   left:-10px;
-
   transform:translateY(-50%);
 }
 
 .crosshair::after{
-
   content:"";
-
   position:absolute;
-
   width:2px;
   height:20px;
-
   background:white;
-
   left:50%;
   top:-10px;
-
   transform:translateX(-50%);
 }
 
 /* =========================
    FADE
 ========================= */
-
-.fade-out{
-  opacity:0;
-}
+.fade-out{ opacity:0; }
 
 </style>
 </head>
@@ -369,84 +242,38 @@ body{
 <body>
 
 <!-- LOADING -->
-
 <div id="loadingScreen">
-
-  <div class="loading-text">
-    Loading VR
-  </div>
-
+  <div class="loading-text">Loading VR</div>
 </div>
 
 <!-- ENTER -->
-
 <div id="enterScreen">
-
   <div class="enter-box">
-
-    <div class="enter-title">
-      Place Your Phone<br>
-      Inside The VR Box
-    </div>
-
-    <div class="enter-sub">
-
-      Put it on your head and press
-      the button below to enter VR mode.
-
-    </div>
-
-    <button
-      class="enter-btn"
-      id="enterVrBtn"
-    >
-      Enter VR
-    </button>
-
+    <div class="enter-title">Place Your Phone<br>Inside The VR Box</div>
+    <div class="enter-sub">Put it on your head and press the button below to enter VR mode.</div>
+    <button class="enter-btn" id="enterVrBtn">Enter VR</button>
   </div>
-
 </div>
 
 <!-- VR -->
-
 <div id="vrContainer">
-
   <div class="center-line"></div>
-
+  
   <!-- LEFT -->
-
   <div class="eye left-eye">
-
     <div class="view">
-
-      <div
-        class="panorama"
-        id="leftPano"
-      ></div>
-
+      <div class="panorama" id="leftPano"></div>
     </div>
-
     <div class="crosshair"></div>
-
   </div>
 
   <!-- RIGHT -->
-
   <div class="eye right-eye">
-
     <div class="view">
-
-      <div
-        class="panorama"
-        id="rightPano"
-      ></div>
-
+      <div class="panorama" id="rightPano"></div>
     </div>
-
     <div class="crosshair"></div>
-
   </div>
-
 </div>
 
 <script>
@@ -454,83 +281,48 @@ body{
 /* =========================
    CHECK STORAGE
 ========================= */
-
-const userData =
-localStorage.getItem(
-  "omni360UserData"
-);
-
+const userData = localStorage.getItem("omni360UserData");
 if(!userData){
-
-  window.location.href =
-  "index.html";
+  window.location.href = "index.html";
 }
 
 /* =========================
-   IMAGE
+   IMAGE & CACHE
 ========================= */
+const vrImage = "https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png";
 
-const vrImage =
-"https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png";
-
-/* =========================
-   CACHE IMAGE
-========================= */
-
-caches.open("omni360-vr-cache")
-.then(cache=>{
-
-  cache.add(vrImage);
-
+caches.open("omni360-vr-cache").then(cache => {
+  cache.add(vrImage).catch(e => console.log("Cache skip"));
 });
 
 /* =========================
    LOAD
 ========================= */
-
 const img = new Image();
-
 img.src = vrImage;
 
-img.onload = ()=>{
-
-  setTimeout(()=>{
-
-    const loading =
-    document.getElementById(
-      "loadingScreen"
-    );
-
-    loading.classList.add(
-      "fade-out"
-    );
-
-    setTimeout(()=>{
-
-      loading.style.display =
-      "none";
-
+img.onload = () => {
+  setTimeout(() => {
+    const loading = document.getElementById("loadingScreen");
+    loading.classList.add("fade-out");
+    setTimeout(() => {
+      loading.style.display = "none";
       startEnterScreen();
+    }, 1000);
+  }, 1200);
+};
 
-    },1000);
-
-  },1200);
+img.onerror = () => {
+  // Fallback just in case image is blocked
+  startEnterScreen();
 };
 
 /* =========================
    ENTER SCREEN
 ========================= */
-
 function startEnterScreen(){
-
-  document.getElementById(
-    "enterScreen"
-  ).style.display = "flex";
-
-  document.getElementById(
-    "enterVrBtn"
-  ).onclick = ()=>{
-
+  document.getElementById("enterScreen").style.display = "flex";
+  document.getElementById("enterVrBtn").onclick = () => {
     enterVR();
   };
 }
@@ -538,89 +330,57 @@ function startEnterScreen(){
 /* =========================
    ENTER VR
 ========================= */
-
 function enterVR(){
-
-  const enter =
-  document.getElementById(
-    "enterScreen"
-  );
-
-  enter.classList.add(
-    "fade-out"
-  );
-
-  setTimeout(()=>{
-
-    enter.style.display =
-    "none";
-
-    document.getElementById(
-      "vrContainer"
-    ).style.display = "block";
-
+  const enter = document.getElementById("enterScreen");
+  enter.classList.add("fade-out");
+  
+  setTimeout(() => {
+    enter.style.display = "none";
+    document.getElementById("vrContainer").style.display = "block";
+    
+    lockLandscape();
     enterFullscreen();
-
     keepScreenAwake();
-
     startGyroscope();
-
-  },1000);
+  }, 1000);
 }
 
 /* =========================
    PANOS
 ========================= */
-
-const leftPano =
-document.getElementById(
-  "leftPano"
-);
-
-const rightPano =
-document.getElementById(
-  "rightPano"
-);
+const leftPano = document.getElementById("leftPano");
+const rightPano = document.getElementById("rightPano");
 
 /* =========================
-   SMOOTHING
+   SMOOTHING & MATH STATE
 ========================= */
-
 let smoothYaw = 0;
 let smoothPitch = 0;
 let smoothRoll = 0;
+let isFirstReading = true;
+
+// Helper to find shortest path around a circle
+function getAngleDelta(current, target) {
+  let delta = target - current;
+  // If the difference is larger than 180, go the other way around
+  while (delta > 180) delta -= 360;
+  while (delta < -180) delta += 360;
+  return delta;
+}
 
 /* =========================
    GYRO
 ========================= */
-
 function startGyroscope(){
-
-  if(
-
-    typeof DeviceOrientationEvent
-    !== "undefined"
-
-    &&
-
-    typeof DeviceOrientationEvent
-    .requestPermission === "function"
-
-  ){
-
-    DeviceOrientationEvent
-    .requestPermission()
-    .then(permission=>{
-
-      if(permission === "granted"){
-
-        setupOrientation();
-      }
-
+  if (typeof DeviceOrientationEvent !== "undefined" && 
+      typeof DeviceOrientationEvent.requestPermission === "function") {
+    DeviceOrientationEvent.requestPermission().then(permission => {
+      if (permission === "granted") setupOrientation();
+    }).catch(err => {
+      console.log("Gyro permission denied", err);
+      setupOrientation(); // Try anyway
     });
-
-  }else{
-
+  } else {
     setupOrientation();
   }
 }
@@ -628,162 +388,117 @@ function startGyroscope(){
 /* =========================
    SENSOR
 ========================= */
-
 function setupOrientation(){
+  window.addEventListener("deviceorientation", (event) => {
+    
+    const alpha = event.alpha || 0;
+    const beta = event.beta || 0;
+    const gamma = event.gamma || 0;
 
-  window.addEventListener(
+    // Set baseline instantly on first read to prevent wild spinning on load
+    if (isFirstReading) {
+      smoothYaw = alpha;
+      smoothPitch = beta;
+      smoothRoll = gamma;
+      isFirstReading = false;
+      return;
+    }
 
-    "deviceorientation",
+    // Calculate true shortest-path delta (Fixes the 360° snap bug)
+    const deltaYaw = getAngleDelta(smoothYaw, alpha);
+    const deltaPitch = getAngleDelta(smoothPitch, beta);
+    const deltaRoll = getAngleDelta(smoothRoll, gamma);
 
-    (event)=>{
+    // Apply smoothing to the deltas
+    smoothYaw += deltaYaw * 0.08;   // 0.08 feels responsive but smooth in VR
+    smoothPitch += deltaPitch * 0.08;
+    smoothRoll += deltaRoll * 0.08;
 
-      const alpha =
-      event.alpha || 0;
+    // Keep yaw strictly within 0-360 for background math
+    if (smoothYaw < 0) smoothYaw += 360;
+    if (smoothYaw >= 360) smoothYaw -= 360;
 
-      const beta =
-      event.beta || 0;
+    renderVR();
 
-      const gamma =
-      event.gamma || 0;
-
-      /* TARGET */
-
-      const targetYaw =
-      alpha;
-
-      const targetPitch =
-      beta;
-
-      const targetRoll =
-      gamma;
-
-      /* SMOOTH */
-
-      smoothYaw +=
-      (targetYaw - smoothYaw)
-      * 0.05;
-
-      smoothPitch +=
-      (targetPitch - smoothPitch)
-      * 0.05;
-
-      smoothRoll +=
-      (targetRoll - smoothRoll)
-      * 0.05;
-
-      renderVR();
-
-    },
-
-    true
-  );
+  }, true);
 }
 
 /* =========================
    RENDER
 ========================= */
+function renderVR() {
 
-function renderVR(){
+  /* 
+    1. TRUE 360 BACKGROUND SHIFT
+    We map the 0-360 Yaw directly to background-position percentage.
+    Because the element is 300% wide and repeats in X, this creates a 
+    flawless infinite horizontal loop without black edges.
+  */
+  const bgX = (smoothYaw / 360) * 100;
 
-  const moveX =
-  smoothYaw * -4;
+  leftPano.style.backgroundPosition = `${bgX}% center`;
+  rightPano.style.backgroundPosition = `${bgX}% center`;
 
-  const moveY =
-  smoothPitch * -2;
 
-  const rotate =
-  smoothRoll * 0.2;
+  /* 
+    2. SPHERICAL PITCH & ROLL BOWING
+    Real VR headsets bow the image up/down based on pitch. 
+    We use trigonometry to simulate the lens curvature.
+  */
+  const pitchRad = smoothPitch * (Math.PI / 180);
+  const rollRad = smoothRoll * (Math.PI / 180);
+
+  // Push image vertically to simulate looking up/down
+  const moveY = Math.sin(pitchRad) * -45; 
+
+  // Slight scale increase when looking far up/down to hide edges (Lens curve effect)
+  const scaleCurve = 1.15 + (Math.abs(smoothPitch) * 0.001); 
+
+  // Roll (Tilting head left/right)
+  const rollDeg = smoothRoll * 0.4; // Reduced from 1.0 to 0.4 so it doesn't spin wildly
 
   const transform = `
-
-    translateX(${moveX}px)
-
     translateY(${moveY}px)
-
-    rotate(${rotate}deg)
-
-    scale(1.15)
-
+    rotate(${rollDeg}deg)
+    scale(${scaleCurve})
   `;
 
-  leftPano.style.transform =
-  transform;
-
-  rightPano.style.transform =
-  transform;
+  leftPano.style.transform = transform;
+  rightPano.style.transform = transform;
 }
 
 /* =========================
    LANDSCAPE LOCK
 ========================= */
-
 async function lockLandscape(){
-
-  try{
-
-    if(
-
-      screen.orientation &&
-      screen.orientation.lock
-
-    ){
-
-      await screen.orientation
-      .lock("landscape");
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock("landscape");
     }
-
-  }catch(e){}
+  } catch(e) {}
 }
-
-lockLandscape();
 
 /* =========================
    FULLSCREEN
 ========================= */
-
 async function enterFullscreen(){
-
-  const el =
-  document.documentElement;
-
-  try{
-
-    if(el.requestFullscreen){
-
-      await el.requestFullscreen();
-
-    }else if(
-      el.webkitRequestFullscreen
-    ){
-
-      await el.webkitRequestFullscreen();
-
-    }else if(
-      el.msRequestFullscreen
-    ){
-
-      await el.msRequestFullscreen();
-    }
-
-  }catch(e){}
+  const el = document.documentElement;
+  try {
+    if(el.requestFullscreen) await el.requestFullscreen();
+    else if(el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    else if(el.msRequestFullscreen) await el.msRequestFullscreen();
+  } catch(e) {}
 }
 
 /* =========================
    WAKE LOCK
 ========================= */
-
 async function keepScreenAwake(){
-
-  try{
-
+  try {
     if("wakeLock" in navigator){
-
-      await navigator.wakeLock.request(
-        "screen"
-      );
+      await navigator.wakeLock.request("screen");
     }
-
-  }catch(e){}
+  } catch(e) {}
 }
 
 </script>
