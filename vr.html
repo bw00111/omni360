@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>VR 360° Viewer</title>
+    <title>VR Experience</title>
     <style>
         * {
             margin: 0;
@@ -13,44 +13,40 @@
 
         body {
             background: #000;
-            color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             width: 100vw;
             height: 100vh;
-            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
-        /* ===== ROTATE SCREEN ===== */
-        #rotate-screen {
+        /* Rotate prompt */
+        #rotate-prompt {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a15 100%);
+            background: linear-gradient(135deg, #0a0a2e, #1a1a4e);
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            z-index: 1000;
-            transition: opacity 0.5s ease;
+            justify-content: center;
+            z-index: 10000;
+            color: white;
+            transition: opacity 0.5s;
         }
 
-        #rotate-screen.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .phone-icon {
+        #rotate-prompt .phone-icon {
             width: 80px;
             height: 140px;
-            border: 4px solid #fff;
+            border: 4px solid white;
             border-radius: 16px;
             position: relative;
             animation: rotatePhone 2s ease-in-out infinite;
             margin-bottom: 30px;
         }
 
-        .phone-icon::before {
+        #rotate-prompt .phone-icon::after {
             content: '';
             position: absolute;
             bottom: 10px;
@@ -58,20 +54,8 @@
             transform: translateX(-50%);
             width: 20px;
             height: 20px;
-            border: 3px solid #fff;
+            border: 3px solid white;
             border-radius: 50%;
-        }
-
-        .phone-icon::after {
-            content: '';
-            position: absolute;
-            top: 8px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 30px;
-            height: 4px;
-            background: #fff;
-            border-radius: 2px;
         }
 
         @keyframes rotatePhone {
@@ -80,617 +64,510 @@
             100% { transform: rotate(0deg); }
         }
 
-        .rotate-text {
+        #rotate-prompt p {
             font-size: 22px;
             font-weight: 300;
-            text-align: center;
             letter-spacing: 1px;
-            opacity: 0.9;
         }
 
-        .rotate-subtext {
-            font-size: 14px;
-            margin-top: 10px;
-            opacity: 0.5;
-        }
-
-        /* ===== LOADING SCREEN ===== */
+        /* Loading screen */
         #loading-screen {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
-            background: radial-gradient(ellipse at center, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            background: linear-gradient(135deg, #0a0a2e, #1a1a4e);
             display: none;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            z-index: 999;
-            transition: opacity 0.8s ease;
+            justify-content: center;
+            z-index: 9000;
+            color: white;
+            transition: opacity 0.8s;
         }
 
-        #loading-screen.active {
-            display: flex;
-        }
-
-        #loading-screen.fade-out {
-            opacity: 0;
-        }
-
-        .vr-goggles {
+        .vr-loader {
+            position: relative;
             width: 120px;
             height: 60px;
-            border: 4px solid #fff;
-            border-radius: 12px;
-            position: relative;
-            margin-bottom: 40px;
-            animation: float 2s ease-in-out infinite;
+            margin-bottom: 30px;
         }
 
-        .vr-goggles::before, .vr-goggles::after {
+        .vr-lens {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            top: 5px;
+        }
+
+        .vr-lens:first-child { left: 5px; }
+        .vr-lens:last-child { right: 5px; }
+
+        .vr-lens::after {
             content: '';
             position: absolute;
-            width: 36px;
-            height: 36px;
-            border: 3px solid rgba(255,255,255,0.8);
-            border-radius: 50%;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        .vr-goggles::before { left: 14px; }
-        .vr-goggles::after { right: 14px; }
-
-        .vr-goggles .bridge {
-            position: absolute;
-            width: 14px;
-            height: 8px;
-            border-bottom: 3px solid rgba(255,255,255,0.6);
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
+            width: 20px; height: 20px;
             transform: translate(-50%, -50%);
-            border-radius: 0 0 8px 8px;
+            border: 3px solid white;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spinLens 1s linear infinite;
         }
 
-        .vr-goggles .strap-left, .vr-goggles .strap-right {
-            position: absolute;
-            width: 20px;
-            height: 4px;
-            background: rgba(255,255,255,0.5);
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        .vr-goggles .strap-left { left: -24px; border-radius: 2px; }
-        .vr-goggles .strap-right { right: -24px; border-radius: 2px; }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+        @keyframes spinLens {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
         .loading-text {
             font-size: 24px;
             font-weight: 300;
-            letter-spacing: 4px;
-            text-transform: uppercase;
+            letter-spacing: 3px;
             margin-bottom: 20px;
         }
 
         .loading-bar-container {
-            width: 260px;
-            height: 6px;
-            background: rgba(255,255,255,0.15);
-            border-radius: 3px;
+            width: 250px;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
             overflow: hidden;
-            margin-bottom: 15px;
         }
 
         .loading-bar {
-            height: 100%;
             width: 0%;
-            background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
-            border-radius: 3px;
-            transition: width 0.3s ease;
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            border-radius: 2px;
+            transition: width 0.3s;
         }
 
-        .loading-percent {
-            font-size: 16px;
-            opacity: 0.6;
-            font-variant-numeric: tabular-nums;
-        }
-
-        /* ===== VR CANVAS ===== */
-        #vr-canvas {
+        /* VR Canvas */
+        #vr-container {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             display: none;
+            z-index: 100;
+        }
+
+        canvas#vr-canvas {
             width: 100%;
             height: 100%;
-        }
-
-        #vr-canvas.active {
             display: block;
         }
 
-        /* ===== VR UI OVERLAY ===== */
-        #vr-ui {
+        /* Enter VR button - minimal */
+        #enter-vr-btn {
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            display: none;
-            gap: 15px;
-            z-index: 100;
-            align-items: center;
-        }
-
-        #vr-ui.active {
-            display: flex;
-        }
-
-        .vr-btn {
-            padding: 12px 24px;
+            z-index: 200;
             background: rgba(255,255,255,0.15);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.3);
-            color: #fff;
-            font-size: 14px;
-            font-weight: 500;
+            color: white;
+            padding: 12px 30px;
             border-radius: 30px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-            user-select: none;
-        }
-
-        .vr-btn:hover, .vr-btn:active {
-            background: rgba(255,255,255,0.3);
-            transform: scale(1.05);
-        }
-
-        .vr-btn.enter-vr {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border: none;
-            padding: 14px 30px;
             font-size: 16px;
-        }
-
-        .vr-btn.enter-vr:hover {
-            background: linear-gradient(135deg, #764ba2, #f093fb);
-        }
-
-        /* ===== GYRO PERMISSION ===== */
-        #gyro-prompt {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85);
+            cursor: pointer;
             display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1001;
-        }
-
-        #gyro-prompt.active {
-            display: flex;
-        }
-
-        .gyro-box {
-            background: rgba(30,30,50,0.95);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
-            max-width: 400px;
-        }
-
-        .gyro-box h2 {
-            margin-bottom: 15px;
-            font-weight: 400;
-        }
-
-        .gyro-box p {
-            opacity: 0.7;
-            margin-bottom: 25px;
-            line-height: 1.5;
-        }
-
-        /* Desktop hint */
-        #desktop-hint {
-            position: fixed;
-            top: 15px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 13px;
-            opacity: 0.7;
-            z-index: 50;
-            display: none;
-            pointer-events: none;
+            letter-spacing: 1px;
         }
     </style>
 </head>
 <body>
-
-    <!-- ===== ROTATE SCREEN ===== -->
-    <div id="rotate-screen">
+    <!-- Rotate Prompt -->
+    <div id="rotate-prompt">
         <div class="phone-icon"></div>
-        <div class="rotate-text">Rotate Your Phone</div>
-        <div class="rotate-subtext">Landscape mode required for VR</div>
+        <p>Rotate your phone to landscape</p>
     </div>
 
-    <!-- ===== LOADING SCREEN ===== -->
+    <!-- Loading Screen -->
     <div id="loading-screen">
-        <div class="vr-goggles">
-            <div class="bridge"></div>
-            <div class="strap-left"></div>
-            <div class="strap-right"></div>
+        <div class="vr-loader">
+            <div class="vr-lens"></div>
+            <div class="vr-lens"></div>
         </div>
-        <div class="loading-text">Loading VR</div>
+        <div class="loading-text">LOADING VR</div>
         <div class="loading-bar-container">
             <div class="loading-bar" id="loading-bar"></div>
         </div>
-        <div class="loading-percent" id="loading-percent">0%</div>
     </div>
 
-    <!-- ===== GYRO PERMISSION ===== -->
-    <div id="gyro-prompt">
-        <div class="gyro-box">
-            <h2>🔄 Motion Sensors</h2>
-            <p>Allow access to your device's motion sensors for the full VR experience with head tracking.</p>
-            <button class="vr-btn enter-vr" id="gyro-allow-btn">Enable Motion</button>
-            <br><br>
-            <button class="vr-btn" id="gyro-skip-btn">Skip (Use Touch)</button>
-        </div>
+    <!-- VR Container -->
+    <div id="vr-container">
+        <canvas id="vr-canvas"></canvas>
     </div>
 
-    <!-- ===== VR CANVAS ===== -->
-    <canvas id="vr-canvas"></canvas>
-
-    <!-- ===== VR UI ===== -->
-    <div id="vr-ui">
-        <button class="vr-btn" id="stereo-btn">👓 Stereo VR</button>
-        <button class="vr-btn enter-vr" id="enter-vr-btn" style="display:none;">🥽 Enter WebXR</button>
-        <button class="vr-btn" id="fullscreen-btn">⛶ Fullscreen</button>
-    </div>
-
-    <div id="desktop-hint">Click and drag to look around</div>
+    <button id="enter-vr-btn">Enter VR</button>
 
     <script>
-        // ===== CONFIG =====
+        // ===================== GLOBALS =====================
         const IMAGE_URL = 'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
-        const CACHE_NAME = 'vr-360-cache-v1';
 
-        // ===== ELEMENTS =====
-        const rotateScreen = document.getElementById('rotate-screen');
-        const loadingScreen = document.getElementById('loading-screen');
-        const loadingBar = document.getElementById('loading-bar');
-        const loadingPercent = document.getElementById('loading-percent');
-        const vrCanvas = document.getElementById('vr-canvas');
-        const vrUI = document.getElementById('vr-ui');
-        const stereoBtn = document.getElementById('stereo-btn');
-        const enterVRBtn = document.getElementById('enter-vr-btn');
-        const fullscreenBtn = document.getElementById('fullscreen-btn');
-        const gyroPrompt = document.getElementById('gyro-prompt');
-        const gyroAllowBtn = document.getElementById('gyro-allow-btn');
-        const gyroSkipBtn = document.getElementById('gyro-skip-btn');
-        const desktopHint = document.getElementById('desktop-hint');
-
-        // ===== STATE =====
-        let gl, texture, shaderProgram;
-        let isStereo = false;
-        let isVRSession = false;
-        let xrSession = null;
-        let xrRefSpace = null;
+        let gl, canvas;
+        let panoramaTexture = null;
         let imageLoaded = false;
-        let gyroEnabled = false;
 
         // Camera
-        let camYaw = 0, camPitch = 0;
-        let targetYaw = 0, targetPitch = 0;
+        let pitch = 0, yaw = 0;
+        let targetPitch = 0, targetYaw = 0;
+        let smoothFactor = 0.08;
 
-        // Touch/Mouse
+        // Gyro
+        let gyroAvailable = false;
+        let alphaOffset = null;
+        let orientAlpha = 0, orientBeta = 0, orientGamma = 0;
+
+        // Touch fallback
+        let touchStartX = 0, touchStartY = 0;
+        let touchYaw = 0, touchPitch = 0;
         let isDragging = false;
-        let lastX = 0, lastY = 0;
 
-        // Gyroscope
-        let gyroAlpha = 0, gyroBeta = 0, gyroGamma = 0;
-        let useGyro = false;
+        // VR mode
+        let isVRMode = false;
 
-        // Device detection
-        const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        // Crosshair / gaze
+        let gazeTarget = null;
+        let gazeTimer = 0;
+        let gazeThreshold = 2.0; // seconds
+        let gazeProgress = 0;
+        let lastFrameTime = 0;
 
-        // ===== 1. ORIENTATION CHECK =====
-        function checkOrientation() {
-            if (!isMobile) {
-                // Desktop: skip rotation screen
-                rotateScreen.classList.add('hidden');
-                setTimeout(() => {
-                    rotateScreen.style.display = 'none';
-                    desktopHint.style.display = 'block';
-                    startLoading();
-                }, 500);
-                return;
-            }
+        // Clock app
+        let clockAppOpen = false;
 
-            const isLandscape = window.innerWidth > window.innerHeight;
-            if (isLandscape) {
-                rotateScreen.classList.add('hidden');
-                setTimeout(() => {
-                    rotateScreen.style.display = 'none';
-                    startLoading();
-                }, 500);
+        // Shader programs
+        let panoProgram, uiProgram;
+
+        // UI elements in 3D space
+        const UI_CARD = {
+            position: [0, 2.5, -5],
+            width: 4,
+            height: 2.5,
+            id: 'card'
+        };
+
+        const APPS = [
+            { name: 'Clock', icon: '🕐', position: [-3, -0.5, -5], id: 'clock' },
+            { name: 'Weather', icon: '🌤', position: [-1.5, -0.5, -5], id: 'weather' },
+            { name: 'Music', icon: '🎵', position: [0, -0.5, -5], id: 'music' },
+            { name: 'Photos', icon: '📷', position: [1.5, -0.5, -5], id: 'photos' },
+            { name: 'Settings', icon: '⚙️', position: [3, -0.5, -5], id: 'settings' },
+        ];
+
+        let clockWindow = null; // { position, width, height }
+
+        // ===================== LOCK LANDSCAPE =====================
+        function lockLandscape() {
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape-primary').catch(() => {});
             }
         }
 
-        window.addEventListener('resize', () => {
-            if (!isMobile) return;
-            const isLandscape = window.innerWidth > window.innerHeight;
-            if (isLandscape && rotateScreen.style.display !== 'none') {
-                rotateScreen.classList.add('hidden');
+        // ===================== ORIENTATION CHECK =====================
+        function isLandscape() {
+            return window.innerWidth > window.innerHeight;
+        }
+
+        function checkOrientation() {
+            const prompt = document.getElementById('rotate-prompt');
+            if (isLandscape()) {
+                prompt.style.opacity = '0';
                 setTimeout(() => {
-                    rotateScreen.style.display = 'none';
+                    prompt.style.display = 'none';
                     startLoading();
                 }, 500);
+            } else {
+                prompt.style.display = 'flex';
+                prompt.style.opacity = '1';
             }
-            if (gl) resizeCanvas();
-        });
+        }
 
-        window.addEventListener('orientationchange', () => {
-            setTimeout(checkOrientation, 300);
-        });
+        // ===================== IMAGE LOADING & CACHING =====================
+        let loadingStarted = false;
 
-        // ===== 2. IMAGE LOADING WITH CACHE =====
-        async function startLoading() {
-            loadingScreen.classList.add('active');
+        function startLoading() {
+            if (loadingStarted) return;
+            loadingStarted = true;
+
+            const loadingScreen = document.getElementById('loading-screen');
+            loadingScreen.style.display = 'flex';
+            const loadingBar = document.getElementById('loading-bar');
 
             // Try cache first
-            let blob = await getFromCache(IMAGE_URL);
-            if (!blob) {
-                blob = await fetchWithProgress(IMAGE_URL);
-                if (blob) await saveToCache(IMAGE_URL, blob);
-            } else {
-                // Simulate loading for cached image
-                animateLoadingBar(100, 400);
-            }
-
-            if (blob) {
-                const imgURL = URL.createObjectURL(blob);
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = () => {
-                    imageLoaded = true;
-                    URL.revokeObjectURL(imgURL);
-                    onImageReady(img);
-                };
-                img.onerror = () => {
-                    loadingPercent.textContent = 'Error loading image';
-                };
-                img.src = imgURL;
-            }
-        }
-
-        async function getFromCache(url) {
-            try {
-                if (!('caches' in window)) return null;
-                const cache = await caches.open(CACHE_NAME);
-                const response = await cache.match(url);
-                if (response) {
-                    console.log('Loaded from cache');
-                    return await response.blob();
-                }
-            } catch (e) {
-                console.warn('Cache read failed', e);
-            }
-            return null;
-        }
-
-        async function saveToCache(url, blob) {
-            try {
-                if (!('caches' in window)) return;
-                const cache = await caches.open(CACHE_NAME);
-                const response = new Response(blob);
-                await cache.put(url, response);
-                console.log('Saved to cache');
-            } catch (e) {
-                console.warn('Cache write failed', e);
-            }
-        }
-
-        async function fetchWithProgress(url) {
-            try {
-                const response = await fetch(url, { mode: 'cors' });
-                if (!response.ok) throw new Error('Fetch failed');
-
-                const contentLength = response.headers.get('content-length');
-                if (!contentLength) {
-                    // No content-length; just download and fake progress
-                    animateLoadingBar(90, 2000);
-                    const blob = await response.blob();
-                    animateLoadingBar(100, 200);
-                    return blob;
-                }
-
-                const total = parseInt(contentLength, 10);
-                const reader = response.body.getReader();
-                let received = 0;
-                const chunks = [];
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                    received += value.length;
-                    const pct = Math.min(Math.round((received / total) * 100), 100);
-                    loadingBar.style.width = pct + '%';
-                    loadingPercent.textContent = pct + '%';
-                }
-
-                const blob = new Blob(chunks);
-                loadingBar.style.width = '100%';
-                loadingPercent.textContent = '100%';
-                return blob;
-
-            } catch (e) {
-                console.error('Fetch error:', e);
-                // Fallback: direct image load
-                loadingPercent.textContent = 'Downloading...';
-                animateLoadingBar(100, 3000);
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.crossOrigin = 'anonymous';
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        canvas.getContext('2d').drawImage(img, 0, 0);
-                        canvas.toBlob(resolve, 'image/jpeg', 0.95);
-                    };
-                    img.onerror = () => resolve(null);
-                    img.src = url;
+            if ('caches' in window) {
+                caches.open('vr-panorama-cache').then(cache => {
+                    cache.match(IMAGE_URL).then(response => {
+                        if (response) {
+                            response.blob().then(blob => {
+                                loadImageFromBlob(blob, loadingBar, loadingScreen);
+                            });
+                        } else {
+                            fetchAndCache(cache, loadingBar, loadingScreen);
+                        }
+                    });
                 });
+            } else {
+                loadImageDirect(loadingBar, loadingScreen);
             }
         }
 
-        function animateLoadingBar(targetPct, duration) {
-            const start = parseFloat(loadingBar.style.width) || 0;
-            const startTime = performance.now();
-            function tick(now) {
-                const elapsed = now - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                const current = start + (targetPct - start) * progress;
-                loadingBar.style.width = current + '%';
-                loadingPercent.textContent = Math.round(current) + '%';
-                if (progress < 1) requestAnimationFrame(tick);
-            }
-            requestAnimationFrame(tick);
+        function fetchAndCache(cache, loadingBar, loadingScreen) {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', IMAGE_URL, true);
+            xhr.responseType = 'blob';
+            xhr.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const pct = (e.loaded / e.total) * 100;
+                    loadingBar.style.width = pct + '%';
+                }
+            };
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    const blob = xhr.response;
+                    // Cache it
+                    const resp = new Response(blob);
+                    cache.put(IMAGE_URL, resp);
+                    loadImageFromBlob(blob, loadingBar, loadingScreen);
+                } else {
+                    loadImageDirect(loadingBar, loadingScreen);
+                }
+            };
+            xhr.onerror = () => loadImageDirect(loadingBar, loadingScreen);
+            xhr.send();
         }
 
-        // ===== 3. WEBGL 360° RENDERING =====
-        function onImageReady(img) {
+        function loadImageFromBlob(blob, loadingBar, loadingScreen) {
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                loadingBar.style.width = '100%';
+                setTimeout(() => onImageReady(img, loadingScreen), 500);
+            };
+            img.src = url;
+        }
+
+        function loadImageDirect(loadingBar, loadingScreen) {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            let fakeProgress = 0;
+            const interval = setInterval(() => {
+                fakeProgress = Math.min(fakeProgress + 2, 90);
+                loadingBar.style.width = fakeProgress + '%';
+            }, 100);
+            img.onload = () => {
+                clearInterval(interval);
+                loadingBar.style.width = '100%';
+                setTimeout(() => onImageReady(img, loadingScreen), 500);
+            };
+            img.onerror = () => {
+                clearInterval(interval);
+                // Create fallback gradient texture
+                const c = document.createElement('canvas');
+                c.width = 2048; c.height = 1024;
+                const ctx = c.getContext('2d');
+                const grad = ctx.createLinearGradient(0, 0, 2048, 1024);
+                grad.addColorStop(0, '#1a1a4e');
+                grad.addColorStop(0.5, '#0a2a5e');
+                grad.addColorStop(1, '#1a1a4e');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 2048, 1024);
+                loadingBar.style.width = '100%';
+                setTimeout(() => onImageReady(c, loadingScreen), 500);
+            };
+            img.src = IMAGE_URL;
+        }
+
+        function onImageReady(img, loadingScreen) {
+            imageLoaded = true;
+            loadingScreen.style.opacity = '0';
             setTimeout(() => {
-                loadingScreen.classList.add('fade-out');
-                setTimeout(() => {
-                    loadingScreen.classList.remove('active');
-                    loadingScreen.classList.remove('fade-out');
-                    initWebGL(img);
-                    vrCanvas.classList.add('active');
-                    vrUI.classList.add('active');
-                    if (isMobile) promptGyro();
-                    checkWebXR();
-                    render();
-                }, 800);
-            }, 500);
+                loadingScreen.style.display = 'none';
+                initVR(img);
+            }, 800);
         }
 
-        function resizeCanvas() {
-            vrCanvas.width = window.innerWidth * window.devicePixelRatio;
-            vrCanvas.height = window.innerHeight * window.devicePixelRatio;
-            vrCanvas.style.width = window.innerWidth + 'px';
-            vrCanvas.style.height = window.innerHeight + 'px';
-        }
+        // ===================== WebGL VR Init =====================
+        function initVR(img) {
+            lockLandscape();
 
-        function initWebGL(img) {
-            gl = vrCanvas.getContext('webgl', { xrCompatible: true, antialias: true }) ||
-                 vrCanvas.getContext('experimental-webgl');
+            const container = document.getElementById('vr-container');
+            container.style.display = 'block';
+            canvas = document.getElementById('vr-canvas');
+
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+
+            gl = canvas.getContext('webgl', { antialias: true, alpha: false }) ||
+                 canvas.getContext('experimental-webgl', { antialias: true, alpha: false });
+
             if (!gl) {
                 alert('WebGL not supported');
                 return;
             }
 
-            resizeCanvas();
+            gl.enable(gl.DEPTH_TEST);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-            // Shaders
-            const vsSource = `
-                attribute vec3 aPosition;
-                uniform mat4 uProjection;
-                uniform mat4 uView;
-                varying vec3 vDir;
-                void main() {
-                    vDir = aPosition;
-                    gl_Position = uProjection * uView * vec4(aPosition, 1.0);
-                }
-            `;
-
-            const fsSource = `
-                precision mediump float;
-                varying vec3 vDir;
-                uniform sampler2D uTexture;
-                #define PI 3.14159265359
-                void main() {
-                    vec3 dir = normalize(vDir);
-                    float u = 0.5 + atan(dir.z, dir.x) / (2.0 * PI);
-                    float v = 0.5 - asin(dir.y) / PI;
-                    gl_FragColor = texture2D(uTexture, vec2(u, v));
-                }
-            `;
-
-            const vs = compileShader(gl, gl.VERTEX_SHADER, vsSource);
-            const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
-            shaderProgram = gl.createProgram();
-            gl.attachShader(shaderProgram, vs);
-            gl.attachShader(shaderProgram, fs);
-            gl.linkProgram(shaderProgram);
-            gl.useProgram(shaderProgram);
-
-            // Sphere geometry
-            const sphere = createSphere(50, 50);
-            const posBuf = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(sphere.vertices), gl.STATIC_DRAW);
-
-            const idxBuf = gl.createBuffer();
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(sphere.indices), gl.STATIC_DRAW);
-
-            const aPos = gl.getAttribLocation(shaderProgram, 'aPosition');
-            gl.enableVertexAttribArray(aPos);
-            gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
-
-            // Texture
-            texture = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, texture);
+            // Create panorama texture
+            panoramaTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, panoramaTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
 
-            gl.enable(gl.DEPTH_TEST);
+            // Create shaders
+            createShaderPrograms();
 
-            window.sphereIndexCount = sphere.indices.length;
-            setupControls();
+            // Create sphere geometry
+            createSphereBuffers();
+
+            // Create quad buffers for UI
+            createQuadBuffers();
+
+            // Setup gyro
+            setupGyroscope();
+
+            // Setup touch
+            setupTouch();
+
+            // Fullscreen on tap
+            canvas.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                    lockLandscape();
+                }
+                if (!isVRMode) {
+                    isVRMode = true;
+                }
+            });
+
+            // Start render
+            lastFrameTime = performance.now();
+            requestAnimationFrame(renderLoop);
+
+            // Auto enter VR mode
+            isVRMode = true;
+            document.documentElement.requestFullscreen().catch(() => {});
         }
 
-        function compileShader(gl, type, src) {
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, src);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error(gl.getShaderInfoLog(shader));
-                gl.deleteShader(shader);
-                return null;
+        // ===================== SHADERS =====================
+        // Panorama vertex shader
+        const PANO_VS = `
+            attribute vec3 aPosition;
+            attribute vec2 aTexCoord;
+            uniform mat4 uProjection;
+            uniform mat4 uView;
+            varying vec2 vTexCoord;
+            void main() {
+                gl_Position = uProjection * uView * vec4(aPosition, 1.0);
+                vTexCoord = aTexCoord;
             }
-            return shader;
+        `;
+
+        const PANO_FS = `
+            precision mediump float;
+            varying vec2 vTexCoord;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vTexCoord);
+            }
+        `;
+
+        // UI shader (colored quads)
+        const UI_VS = `
+            attribute vec3 aPosition;
+            uniform mat4 uProjection;
+            uniform mat4 uView;
+            uniform mat4 uModel;
+            varying vec3 vWorldPos;
+            void main() {
+                vec4 worldPos = uModel * vec4(aPosition, 1.0);
+                gl_Position = uProjection * uView * worldPos;
+                vWorldPos = worldPos.xyz;
+            }
+        `;
+
+        const UI_FS = `
+            precision mediump float;
+            uniform vec4 uColor;
+            uniform float uBorderRadius;
+            uniform vec2 uSize;
+            uniform vec2 uCenter;
+            varying vec3 vWorldPos;
+            void main() {
+                gl_FragColor = uColor;
+            }
+        `;
+
+        let sphereVBO, sphereIBO, sphereIndexCount;
+        let quadVBO, quadIBO;
+
+        function createShaderPrograms() {
+            panoProgram = createProgram(PANO_VS, PANO_FS);
+            uiProgram = createProgram(UI_VS, UI_FS);
         }
 
-        function createSphere(latBands, lonBands) {
+        function createProgram(vsSource, fsSource) {
+            const vs = compileShader(gl.VERTEX_SHADER, vsSource);
+            const fs = compileShader(gl.FRAGMENT_SHADER, fsSource);
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vs);
+            gl.attachShader(prog, fs);
+            gl.linkProgram(prog);
+            if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+                console.error(gl.getProgramInfoLog(prog));
+            }
+            return prog;
+        }
+
+        function compileShader(type, source) {
+            const s = gl.createShader(type);
+            gl.shaderSource(s, source);
+            gl.compileShader(s);
+            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(s));
+            }
+            return s;
+        }
+
+        // ===================== SPHERE GEOMETRY =====================
+        function createSphereBuffers() {
+            const latBands = 40;
+            const lonBands = 40;
+            const radius = 50;
+
             const vertices = [];
             const indices = [];
+
             for (let lat = 0; lat <= latBands; lat++) {
                 const theta = lat * Math.PI / latBands;
-                const sinT = Math.sin(theta);
-                const cosT = Math.cos(theta);
+                const sinTheta = Math.sin(theta);
+                const cosTheta = Math.cos(theta);
+
                 for (let lon = 0; lon <= lonBands; lon++) {
                     const phi = lon * 2 * Math.PI / lonBands;
-                    const x = Math.cos(phi) * sinT;
-                    const y = cosT;
-                    const z = Math.sin(phi) * sinT;
-                    vertices.push(x, y, z);
+                    const sinPhi = Math.sin(phi);
+                    const cosPhi = Math.cos(phi);
+
+                    const x = cosPhi * sinTheta;
+                    const y = cosTheta;
+                    const z = sinPhi * sinTheta;
+                    const u = 1 - (lon / lonBands);
+                    const v = lat / latBands;
+
+                    vertices.push(radius * x, radius * y, radius * z, u, v);
                 }
             }
+
             for (let lat = 0; lat < latBands; lat++) {
                 for (let lon = 0; lon < lonBands; lon++) {
                     const first = lat * (lonBands + 1) + lon;
@@ -699,280 +576,865 @@
                     indices.push(second, second + 1, first + 1);
                 }
             }
-            return { vertices, indices };
+
+            sphereVBO = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+
+            sphereIBO = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+            sphereIndexCount = indices.length;
         }
 
-        // ===== MATRIX MATH =====
-        function mat4Perspective(fov, aspect, near, far) {
-            const f = 1.0 / Math.tan(fov / 2);
+        function createQuadBuffers() {
+            // Unit quad centered at origin, 1x1
+            const verts = [
+                -0.5, -0.5, 0,
+                 0.5, -0.5, 0,
+                 0.5,  0.5, 0,
+                -0.5,  0.5, 0
+            ];
+            const idx = [0, 1, 2, 0, 2, 3];
+
+            quadVBO = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+
+            quadIBO = gl.createBuffer();
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, quadIBO);
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+        }
+
+        // ===================== MATRIX MATH =====================
+        function perspective(fovY, aspect, near, far) {
+            const f = 1.0 / Math.tan(fovY / 2);
             const nf = 1 / (near - far);
             return new Float32Array([
                 f / aspect, 0, 0, 0,
                 0, f, 0, 0,
                 0, 0, (far + near) * nf, -1,
-                0, 0, 2 * far * near * nf, 0
+                0, 0, (2 * far * near) * nf, 0
             ]);
         }
 
-        function mat4LookDir(yaw, pitch) {
-            const cy = Math.cos(yaw), sy = Math.sin(yaw);
-            const cp = Math.cos(pitch), sp = Math.sin(pitch);
-            // View matrix for looking in direction defined by yaw/pitch
+        function identityMatrix() {
             return new Float32Array([
-                cy, sy * sp, -sy * cp, 0,
-                0, cp, sp, 0,
-                sy, -cy * sp, cy * cp, 0,
-                0, 0, 0, 1
+                1,0,0,0,
+                0,1,0,0,
+                0,0,1,0,
+                0,0,0,1
             ]);
         }
 
-        // ===== RENDER =====
-        function renderEye(x, y, w, h, yawOffset) {
-            gl.viewport(x, y, w, h);
-            const aspect = w / h;
-            const fov = isStereo ? 1.5 : 1.4; // ~80-86 degrees
-            const projection = mat4Perspective(fov, aspect, 0.1, 100.0);
-            const view = mat4LookDir(camYaw + yawOffset, camPitch);
-
-            const uProj = gl.getUniformLocation(shaderProgram, 'uProjection');
-            const uView = gl.getUniformLocation(shaderProgram, 'uView');
-            gl.uniformMatrix4fv(uProj, false, projection);
-            gl.uniformMatrix4fv(uView, false, view);
-
-            gl.drawElements(gl.TRIANGLES, window.sphereIndexCount, gl.UNSIGNED_SHORT, 0);
+        function rotateX(m, angle) {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            const r = identityMatrix();
+            r[5] = c; r[6] = s;
+            r[9] = -s; r[10] = c;
+            return multiply(m, r);
         }
 
-        function render() {
-            if (isVRSession) return; // WebXR handles its own loop
+        function rotateY(m, angle) {
+            const c = Math.cos(angle), s = Math.sin(angle);
+            const r = identityMatrix();
+            r[0] = c; r[2] = -s;
+            r[8] = s; r[10] = c;
+            return multiply(m, r);
+        }
 
-            if (!gl) { requestAnimationFrame(render); return; }
+        function translate(m, x, y, z) {
+            const t = identityMatrix();
+            t[12] = x; t[13] = y; t[14] = z;
+            return multiply(m, t);
+        }
 
-            // Smooth camera
-            camYaw += (targetYaw - camYaw) * 0.15;
-            camPitch += (targetPitch - camPitch) * 0.15;
+        function scale(m, sx, sy, sz) {
+            const s = identityMatrix();
+            s[0] = sx; s[5] = sy; s[10] = sz;
+            return multiply(m, s);
+        }
 
-            const w = vrCanvas.width;
-            const h = vrCanvas.height;
-
-            gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-            if (isStereo) {
-                // Left eye
-                renderEye(0, 0, w / 2, h, 0.03);
-                // Right eye
-                renderEye(w / 2, 0, w / 2, h, -0.03);
-            } else {
-                renderEye(0, 0, w, h, 0);
+        function multiply(a, b) {
+            const out = new Float32Array(16);
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    out[i * 4 + j] = 0;
+                    for (let k = 0; k < 4; k++) {
+                        out[i * 4 + j] += a[k * 4 + j] * b[i * 4 + k];
+                    }
+                }
             }
-
-            requestAnimationFrame(render);
+            return out;
         }
 
-        // ===== CONTROLS =====
-        function setupControls() {
-            // Touch
-            vrCanvas.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                isDragging = true;
-                lastX = e.touches[0].clientX;
-                lastY = e.touches[0].clientY;
-            }, { passive: false });
-
-            vrCanvas.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                if (!isDragging || useGyro) return;
-                const dx = e.touches[0].clientX - lastX;
-                const dy = e.touches[0].clientY - lastY;
-                targetYaw -= dx * 0.004;
-                targetPitch += dy * 0.004;
-                targetPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, targetPitch));
-                lastX = e.touches[0].clientX;
-                lastY = e.touches[0].clientY;
-            }, { passive: false });
-
-            vrCanvas.addEventListener('touchend', () => isDragging = false);
-
-            // Mouse
-            vrCanvas.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                lastX = e.clientX;
-                lastY = e.clientY;
-                vrCanvas.style.cursor = 'grabbing';
-            });
-
-            window.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                const dx = e.clientX - lastX;
-                const dy = e.clientY - lastY;
-                targetYaw -= dx * 0.003;
-                targetPitch += dy * 0.003;
-                targetPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, targetPitch));
-                lastX = e.clientX;
-                lastY = e.clientY;
-            });
-
-            window.addEventListener('mouseup', () => {
-                isDragging = false;
-                vrCanvas.style.cursor = 'grab';
-            });
-
-            vrCanvas.style.cursor = 'grab';
+        function getViewMatrix() {
+            let m = identityMatrix();
+            m = rotateX(m, pitch);
+            m = rotateY(m, yaw);
+            return m;
         }
 
-        // ===== GYROSCOPE =====
-        function promptGyro() {
+        // ===================== GYROSCOPE =====================
+        function setupGyroscope() {
             if (typeof DeviceOrientationEvent !== 'undefined' &&
                 typeof DeviceOrientationEvent.requestPermission === 'function') {
                 // iOS 13+
-                gyroPrompt.classList.add('active');
+                DeviceOrientationEvent.requestPermission().then(state => {
+                    if (state === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                        gyroAvailable = true;
+                    }
+                }).catch(() => {});
             } else if ('DeviceOrientationEvent' in window) {
-                // Android / other
-                enableGyro();
+                window.addEventListener('deviceorientation', handleOrientation, true);
+                gyroAvailable = true;
             }
         }
 
-        gyroAllowBtn.addEventListener('click', async () => {
-            try {
-                const perm = await DeviceOrientationEvent.requestPermission();
-                if (perm === 'granted') enableGyro();
-            } catch (e) { console.warn(e); }
-            gyroPrompt.classList.remove('active');
-        });
+        function handleOrientation(e) {
+            if (e.alpha === null) return;
+            gyroAvailable = true;
 
-        gyroSkipBtn.addEventListener('click', () => {
-            gyroPrompt.classList.remove('active');
-        });
+            if (alphaOffset === null) {
+                alphaOffset = e.alpha;
+            }
 
-        function enableGyro() {
-            useGyro = true;
-            window.addEventListener('deviceorientation', (e) => {
-                if (!e.alpha && !e.beta && !e.gamma) return;
-                gyroAlpha = (e.alpha || 0) * Math.PI / 180;
-                gyroBeta = (e.beta || 0) * Math.PI / 180;
-                gyroGamma = (e.gamma || 0) * Math.PI / 180;
+            orientAlpha = e.alpha;
+            orientBeta = e.beta;
+            orientGamma = e.gamma;
+        }
 
-                // Convert device orientation to camera look direction
-                // Landscape mode: gamma controls yaw, beta controls pitch
-                const orientation = screen.orientation ? screen.orientation.angle : (window.orientation || 0);
+        function updateCameraFromGyro() {
+            if (!gyroAvailable) return;
 
-                if (orientation === 90 || orientation === -90) {
-                    targetYaw = -gyroAlpha;
-                    targetPitch = -gyroGamma;
+            // Convert device orientation to camera angles
+            // In landscape mode, beta controls yaw and gamma controls pitch
+            const alpha = ((orientAlpha - alphaOffset + 360) % 360);
+            const beta = orientBeta || 0;
+            const gamma = orientGamma || 0;
+
+            // Landscape: phone is rotated 90deg
+            // Map gamma to pitch, alpha to yaw
+            targetPitch = -gamma * Math.PI / 180;
+            targetYaw = -(alpha) * Math.PI / 180;
+
+            // Clamp pitch
+            targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetPitch));
+        }
+
+        // ===================== TOUCH CONTROLS =====================
+        function setupTouch() {
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    touchYaw = yaw;
+                    touchPitch = pitch;
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (isDragging && !gyroAvailable && e.touches.length === 1) {
+                    const dx = e.touches[0].clientX - touchStartX;
+                    const dy = e.touches[0].clientY - touchStartY;
+                    targetYaw = touchYaw + dx * 0.005;
+                    targetPitch = touchPitch + dy * 0.005;
+                    targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetPitch));
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', () => {
+                isDragging = false;
+            });
+
+            // Mouse fallback for desktop
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                touchStartX = e.clientX;
+                touchStartY = e.clientY;
+                touchYaw = yaw;
+                touchPitch = pitch;
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (isDragging) {
+                    const dx = e.clientX - touchStartX;
+                    const dy = e.clientY - touchStartY;
+                    targetYaw = touchYaw + dx * 0.005;
+                    targetPitch = touchPitch + dy * 0.005;
+                    targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetPitch));
+                }
+            });
+
+            canvas.addEventListener('mouseup', () => isDragging = false);
+        }
+
+        // ===================== TEXT TEXTURE =====================
+        function createTextTexture(text, fontSize, color, bgColor, width, height, lines, options = {}) {
+            const c = document.createElement('canvas');
+            c.width = width;
+            c.height = height;
+            const ctx = c.getContext('2d');
+
+            // Background
+            if (options.glassmorphism) {
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.beginPath();
+                const r = options.borderRadius || 20;
+                roundRect(ctx, 0, 0, width, height, r);
+                ctx.fill();
+
+                // Border
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                roundRect(ctx, 0, 0, width, height, r);
+                ctx.stroke();
+            } else if (bgColor) {
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(0, 0, width, height);
+            }
+
+            ctx.fillStyle = color || 'white';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            if (lines && lines.length > 0) {
+                const lineHeight = height / (lines.length + 1);
+                lines.forEach((line, i) => {
+                    ctx.font = line.font || `${fontSize}px 'Segoe UI', sans-serif`;
+                    ctx.fillStyle = line.color || color || 'white';
+                    ctx.fillText(line.text, width / 2, lineHeight * (i + 1));
+                });
+            } else {
+                ctx.font = `${fontSize}px 'Segoe UI', sans-serif`;
+                ctx.fillText(text, width / 2, height / 2);
+            }
+
+            const tex = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+            return tex;
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+        }
+
+        // ===================== DYNAMIC TEXTURES =====================
+        let cardTexture = null;
+        let appTextures = [];
+        let crosshairTexture = null;
+        let gazeCircleTexture = null;
+        let clockWindowTexture = null;
+        let closeButtonTexture = null;
+        let lastTextureUpdate = 0;
+
+        function updateCardTexture() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const dateStr = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+            if (cardTexture) gl.deleteTexture(cardTexture);
+
+            cardTexture = createTextTexture('', 40, 'white', null, 512, 256, [
+                { text: timeStr, font: "bold 72px 'Segoe UI', sans-serif", color: 'white' },
+                { text: dateStr, font: "24px 'Segoe UI', sans-serif", color: 'rgba(255,255,255,0.8)' }
+            ], { glassmorphism: true, borderRadius: 30 });
+        }
+
+        function updateAppTextures() {
+            appTextures.forEach(t => { if (t) gl.deleteTexture(t); });
+            appTextures = [];
+
+            APPS.forEach(app => {
+                const c = document.createElement('canvas');
+                c.width = 128; c.height = 128;
+                const ctx = c.getContext('2d');
+
+                // Glassmorphism background
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.beginPath();
+                roundRect(ctx, 4, 4, 120, 120, 24);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                roundRect(ctx, 4, 4, 120, 120, 24);
+                ctx.stroke();
+
+                // Icon
+                ctx.font = '48px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(app.icon, 64, 58);
+
+                // Name
+                ctx.fillStyle = 'white';
+                ctx.font = "14px 'Segoe UI', sans-serif";
+                ctx.fillText(app.name, 64, 100);
+
+                const tex = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, tex);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                appTextures.push(tex);
+            });
+        }
+
+        function createCrosshairTexture() {
+            const c = document.createElement('canvas');
+            c.width = 64; c.height = 64;
+            const ctx = c.getContext('2d');
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(32, 32, 8, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Center dot
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.beginPath();
+            ctx.arc(32, 32, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            crosshairTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, crosshairTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        }
+
+        function createGazeCircleTexture(progress) {
+            const c = document.createElement('canvas');
+            c.width = 64; c.height = 64;
+            const ctx = c.getContext('2d');
+
+            // Outer ring (progress)
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(32, 32, 16, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Progress arc
+            if (progress > 0) {
+                ctx.strokeStyle = 'rgba(0, 200, 255, 0.9)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(32, 32, 16, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+                ctx.stroke();
+            }
+
+            // Center dot
+            ctx.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx.beginPath();
+            ctx.arc(32, 32, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (gazeCircleTexture) gl.deleteTexture(gazeCircleTexture);
+            gazeCircleTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, gazeCircleTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        }
+
+        function updateClockWindowTexture() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            const dateStr = now.toLocaleDateString();
+
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const seconds = now.getSeconds();
+
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 512;
+            const ctx = c.getContext('2d');
+
+            // Glassmorphism bg
+            ctx.fillStyle = 'rgba(10, 10, 40, 0.85)';
+            ctx.beginPath();
+            roundRect(ctx, 0, 0, 512, 512, 30);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            roundRect(ctx, 0, 0, 512, 512, 30);
+            ctx.stroke();
+
+            // Title
+            ctx.fillStyle = 'white';
+            ctx.font = "bold 28px 'Segoe UI', sans-serif";
+            ctx.textAlign = 'center';
+            ctx.fillText('Clock', 256, 50);
+
+            // Analog clock
+            const cx = 256, cy = 220, r = 130;
+
+            // Clock face
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Hour marks
+            for (let i = 0; i < 12; i++) {
+                const angle = (i * 30 - 90) * Math.PI / 180;
+                const inner = i % 3 === 0 ? r - 20 : r - 12;
+                ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+                ctx.lineWidth = i % 3 === 0 ? 3 : 1;
+                ctx.beginPath();
+                ctx.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner);
+                ctx.lineTo(cx + Math.cos(angle) * (r - 5), cy + Math.sin(angle) * (r - 5));
+                ctx.stroke();
+            }
+
+            // Hour hand
+            const hAngle = ((hours % 12) + minutes / 60) * 30 - 90;
+            const hRad = hAngle * Math.PI / 180;
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(hRad) * 65, cy + Math.sin(hRad) * 65);
+            ctx.stroke();
+
+            // Minute hand
+            const mAngle = (minutes + seconds / 60) * 6 - 90;
+            const mRad = mAngle * Math.PI / 180;
+            ctx.strokeStyle = 'rgba(200,220,255,0.9)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(mRad) * 95, cy + Math.sin(mRad) * 95);
+            ctx.stroke();
+
+            // Second hand
+            const sAngle = seconds * 6 - 90;
+            const sRad = sAngle * Math.PI / 180;
+            ctx.strokeStyle = 'rgba(0, 200, 255, 0.9)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(sRad) * 105, cy + Math.sin(sRad) * 105);
+            ctx.stroke();
+
+            // Center dot
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Digital time
+            ctx.fillStyle = 'white';
+            ctx.font = "bold 48px 'Courier New', monospace";
+            ctx.fillText(timeStr, 256, 410);
+
+            // Date
+            ctx.font = "20px 'Segoe UI', sans-serif";
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillText(dateStr, 256, 460);
+
+            if (clockWindowTexture) gl.deleteTexture(clockWindowTexture);
+            clockWindowTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, clockWindowTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        }
+
+        function createCloseButtonTexture() {
+            const c = document.createElement('canvas');
+            c.width = 64; c.height = 64;
+            const ctx = c.getContext('2d');
+
+            ctx.fillStyle = 'rgba(255, 60, 60, 0.8)';
+            ctx.beginPath();
+            ctx.arc(32, 32, 24, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(20, 20);
+            ctx.lineTo(44, 44);
+            ctx.moveTo(44, 20);
+            ctx.lineTo(20, 44);
+            ctx.stroke();
+
+            closeButtonTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, closeButtonTexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        }
+
+        // ===================== RAY CASTING / GAZE =====================
+        function getGazeDirection() {
+            // Center of view = forward direction, affected by pitch and yaw
+            const dir = [
+                -Math.sin(yaw) * Math.cos(pitch),
+                Math.sin(pitch),
+                -Math.cos(yaw) * Math.cos(pitch)
+            ];
+            return dir;
+        }
+
+        function rayIntersectsQuad(rayDir, quadPos, quadWidth, quadHeight) {
+            // Simple: quad is at quadPos facing +Z (toward camera at origin)
+            // Check if ray hits the z-plane of the quad
+            if (quadPos[2] === 0) return false;
+
+            const t = quadPos[2] / (-rayDir[2]);
+            if (t < 0) return false;
+
+            const hitX = rayDir[0] * t;
+            const hitY = rayDir[1] * t;
+
+            const halfW = quadWidth / 2;
+            const halfH = quadHeight / 2;
+
+            if (hitX >= quadPos[0] - halfW && hitX <= quadPos[0] + halfW &&
+                hitY >= quadPos[1] - halfH && hitY <= quadPos[1] + halfH) {
+                return true;
+            }
+            return false;
+        }
+
+        function checkGaze(dt) {
+            const dir = getGazeDirection();
+            let hovering = null;
+
+            if (clockAppOpen) {
+                // Check close button
+                const closePos = [0, 3.2, -5]; // above clock window
+                if (rayIntersectsQuad(dir, closePos, 0.8, 0.8)) {
+                    hovering = 'close';
+                }
+            } else {
+                // Check clock app
+                const clockApp = APPS[0];
+                if (rayIntersectsQuad(dir, clockApp.position, 1.0, 1.0)) {
+                    hovering = 'clock';
+                }
+            }
+
+            if (hovering) {
+                if (gazeTarget === hovering) {
+                    gazeTimer += dt;
+                    gazeProgress = Math.min(gazeTimer / gazeThreshold, 1.0);
+
+                    if (gazeTimer >= gazeThreshold) {
+                        // Trigger!
+                        if (hovering === 'clock') {
+                            clockAppOpen = true;
+                            clockWindow = {
+                                position: [0, 1.0, -5],
+                                width: 4,
+                                height: 4
+                            };
+                        } else if (hovering === 'close') {
+                            clockAppOpen = false;
+                            clockWindow = null;
+                        }
+                        gazeTimer = 0;
+                        gazeProgress = 0;
+                        gazeTarget = null;
+                    }
                 } else {
-                    targetYaw = -gyroAlpha;
-                    targetPitch = gyroBeta - Math.PI / 2;
+                    gazeTarget = hovering;
+                    gazeTimer = 0;
+                    gazeProgress = 0;
                 }
-
-                targetPitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, targetPitch));
-            }, true);
-        }
-
-        // ===== STEREO TOGGLE =====
-        stereoBtn.addEventListener('click', () => {
-            isStereo = !isStereo;
-            stereoBtn.textContent = isStereo ? '👁 Mono' : '👓 Stereo VR';
-
-            if (isStereo) requestFullscreen();
-        });
-
-        // ===== FULLSCREEN =====
-        fullscreenBtn.addEventListener('click', requestFullscreen);
-
-        function requestFullscreen() {
-            const el = document.documentElement;
-            if (el.requestFullscreen) el.requestFullscreen();
-            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-            else if (el.msRequestFullscreen) el.msRequestFullscreen();
-
-            // Lock orientation
-            try {
-                screen.orientation.lock('landscape').catch(() => {});
-            } catch (e) {}
-        }
-
-        // ===== WEBXR =====
-        async function checkWebXR() {
-            if (!navigator.xr) return;
-            try {
-                const supported = await navigator.xr.isSessionSupported('immersive-vr');
-                if (supported) {
-                    enterVRBtn.style.display = 'block';
-                }
-            } catch (e) {}
-        }
-
-        enterVRBtn.addEventListener('click', startWebXR);
-
-        async function startWebXR() {
-            if (!navigator.xr) return;
-            try {
-                xrSession = await navigator.xr.requestSession('immersive-vr', {
-                    requiredFeatures: ['local-floor']
-                });
-
-                isVRSession = true;
-                vrUI.classList.remove('active');
-
-                const xrGLLayer = new XRWebGLLayer(xrSession, gl);
-                xrSession.updateRenderState({ baseLayer: xrGLLayer });
-
-                xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
-                xrSession.requestAnimationFrame(onXRFrame);
-
-                xrSession.addEventListener('end', () => {
-                    isVRSession = false;
-                    xrSession = null;
-                    vrUI.classList.add('active');
-                    resizeCanvas();
-                    render();
-                });
-
-            } catch (e) {
-                console.error('WebXR error:', e);
+            } else {
+                gazeTarget = null;
+                gazeTimer = 0;
+                gazeProgress = 0;
             }
         }
 
-        function onXRFrame(time, frame) {
-            if (!xrSession) return;
-            xrSession.requestAnimationFrame(onXRFrame);
+        // ===================== RENDER =====================
+        let texturesInitialized = false;
 
-            const glLayer = xrSession.renderState.baseLayer;
-            gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
+        function renderLoop(now) {
+            requestAnimationFrame(renderLoop);
+
+            const dt = (now - lastFrameTime) / 1000;
+            lastFrameTime = now;
+
+            // Init textures once
+            if (!texturesInitialized) {
+                updateCardTexture();
+                updateAppTextures();
+                createCrosshairTexture();
+                createGazeCircleTexture(0);
+                createCloseButtonTexture();
+                texturesInitialized = true;
+            }
+
+            // Update card texture every second
+            if (now - lastTextureUpdate > 1000) {
+                updateCardTexture();
+                if (clockAppOpen) {
+                    updateClockWindowTexture();
+                }
+                lastTextureUpdate = now;
+            }
+
+            // Update gyro
+            if (gyroAvailable) {
+                updateCameraFromGyro();
+            }
+
+            // Smooth camera
+            pitch += (targetPitch - pitch) * smoothFactor;
+            yaw += (targetYaw - yaw) * smoothFactor;
+
+            // Gaze check
+            checkGaze(dt);
+
+            // Update gaze circle texture
+            if (gazeTarget) {
+                createGazeCircleTexture(gazeProgress);
+            }
+
+            // Resize
+            const w = canvas.clientWidth * window.devicePixelRatio;
+            const h = canvas.clientHeight * window.devicePixelRatio;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+
+            if (isVRMode) {
+                renderStereo();
+            } else {
+                renderMono();
+            }
+        }
+
+        function renderMono() {
+            gl.viewport(0, 0, canvas.width, canvas.height);
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-            const pose = frame.getViewerPose(xrRefSpace);
-            if (!pose) return;
+            const aspect = canvas.width / canvas.height;
+            const proj = perspective(Math.PI / 2, aspect, 0.1, 100);
+            const view = getViewMatrix();
 
-            for (const view of pose.views) {
-                const viewport = glLayer.getViewport(view);
-                gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+            renderScene(proj, view, 0);
+        }
 
-                const uProj = gl.getUniformLocation(shaderProgram, 'uProjection');
-                const uView = gl.getUniformLocation(shaderProgram, 'uView');
-                gl.uniformMatrix4fv(uProj, false, view.projectionMatrix);
+        function renderStereo() {
+            const halfWidth = Math.floor(canvas.width / 2);
+            const aspect = halfWidth / canvas.height;
+            const ipd = 0.064; // inter-pupillary distance in meters (scaled)
 
-                // Use inverse of view transform for looking inward at sphere
-                const viewMat = view.transform.inverse.matrix;
-                // Extract rotation only (no translation for 360)
-                const rotOnly = new Float32Array(viewMat);
-                rotOnly[12] = 0;
-                rotOnly[13] = 0;
-                rotOnly[14] = 0;
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-                gl.uniformMatrix4fv(uView, false, rotOnly);
-                gl.drawElements(gl.TRIANGLES, window.sphereIndexCount, gl.UNSIGNED_SHORT, 0);
+            const view = getViewMatrix();
+
+            // Left eye
+            gl.viewport(0, 0, halfWidth, canvas.height);
+            const projL = perspective(Math.PI / 2, aspect, 0.1, 100);
+            const viewL = translate(identityMatrix(), ipd * 0.5, 0, 0);
+            const viewLFinal = multiply(view, viewL);
+            renderScene(projL, viewLFinal, -ipd * 0.5);
+
+            // Right eye
+            gl.viewport(halfWidth, 0, halfWidth, canvas.height);
+            const projR = perspective(Math.PI / 2, aspect, 0.1, 100);
+            const viewR = translate(identityMatrix(), -ipd * 0.5, 0, 0);
+            const viewRFinal = multiply(view, viewR);
+            renderScene(projR, viewRFinal, ipd * 0.5);
+
+            // Draw divider line
+            // (We'll skip this since it would require another draw call; the viewport split already does it)
+        }
+
+        function renderScene(proj, view, eyeOffset) {
+            // 1. Draw panorama sphere
+            gl.useProgram(panoProgram);
+            gl.disable(gl.DEPTH_TEST);
+
+            const aPos = gl.getAttribLocation(panoProgram, 'aPosition');
+            const aTex = gl.getAttribLocation(panoProgram, 'aTexCoord');
+            const uProj = gl.getUniformLocation(panoProgram, 'uProjection');
+            const uView = gl.getUniformLocation(panoProgram, 'uView');
+            const uTexture = gl.getUniformLocation(panoProgram, 'uTexture');
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
+            gl.enableVertexAttribArray(aPos);
+            gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 20, 0);
+            gl.enableVertexAttribArray(aTex);
+            gl.vertexAttribPointer(aTex, 2, gl.FLOAT, false, 20, 12);
+
+            gl.uniformMatrix4fv(uProj, false, proj);
+            gl.uniformMatrix4fv(uView, false, view);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, panoramaTexture);
+            gl.uniform1i(uTexture, 0);
+
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
+            gl.drawElements(gl.TRIANGLES, sphereIndexCount, gl.UNSIGNED_SHORT, 0);
+
+            gl.disableVertexAttribArray(aTex);
+
+            gl.enable(gl.DEPTH_TEST);
+
+            // 2. Draw UI elements using textured quads
+            // We need a textured UI shader. Let's reuse pano shader for textured quads
+
+            // Draw card
+            drawTexturedQuad(proj, view, UI_CARD.position, UI_CARD.width, UI_CARD.height, cardTexture);
+
+            // Draw apps (only if clock window not open)
+            if (!clockAppOpen) {
+                APPS.forEach((app, i) => {
+                    drawTexturedQuad(proj, view, app.position, 1.0, 1.0, appTextures[i]);
+                });
             }
+
+            // Draw clock window
+            if (clockAppOpen && clockWindowTexture) {
+                drawTexturedQuad(proj, view, clockWindow.position, clockWindow.width, clockWindow.height, clockWindowTexture);
+                // Close button
+                const closePos = [clockWindow.position[0], clockWindow.position[1] + clockWindow.height / 2 + 0.5, clockWindow.position[2]];
+                drawTexturedQuad(proj, view, closePos, 0.6, 0.6, closeButtonTexture);
+            }
+
+            // 3. Draw crosshair (always on top, at fixed distance from camera)
+            gl.disable(gl.DEPTH_TEST);
+            const crosshairView = identityMatrix(); // No rotation - always centered
+            const crosshairProj = perspective(Math.PI / 2, canvas.width / (isVRMode ? canvas.height * 2 : canvas.height), 0.1, 100);
+
+            const crosshairTex = gazeTarget ? gazeCircleTexture : crosshairTexture;
+            drawTexturedQuad(crosshairProj, crosshairView, [0, 0, -2], 0.15, 0.15, crosshairTex);
+            gl.enable(gl.DEPTH_TEST);
         }
 
-        // ===== INIT =====
-        checkOrientation();
+        function drawTexturedQuad(proj, view, position, width, height, texture) {
+            if (!texture) return;
 
-        // Desktop auto-start
-        if (!isMobile) {
-            // Already handled in checkOrientation
+            gl.useProgram(panoProgram);
+
+            const aPos = gl.getAttribLocation(panoProgram, 'aPosition');
+            const aTex = gl.getAttribLocation(panoProgram, 'aTexCoord');
+            const uProj = gl.getUniformLocation(panoProgram, 'uProjection');
+            const uView = gl.getUniformLocation(panoProgram, 'uView');
+            const uTexture = gl.getUniformLocation(panoProgram, 'uTexture');
+
+            // Build model-view matrix for this quad
+            // Quad faces toward camera
+            let model = identityMatrix();
+            model = translate(model, position[0], position[1], position[2]);
+            model = scale(model, width, height, 1);
+
+            // Combine view * model
+            const mv = multiply(view, model);
+
+            // Use textured quad vertices with tex coords
+            const verts = new Float32Array([
+                -0.5, -0.5, 0, 0, 1,
+                 0.5, -0.5, 0, 1, 1,
+                 0.5,  0.5, 0, 1, 0,
+                -0.5, -0.5, 0, 0, 1,
+                 0.5,  0.5, 0, 1, 0,
+                -0.5,  0.5, 0, 0, 0,
+            ]);
+
+            const buf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            gl.bufferData(gl.ARRAY_BUFFER, verts, gl.DYNAMIC_DRAW);
+
+            gl.enableVertexAttribArray(aPos);
+            gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 20, 0);
+            gl.enableVertexAttribArray(aTex);
+            gl.vertexAttribPointer(aTex, 2, gl.FLOAT, false, 20, 12);
+
+            gl.uniformMatrix4fv(uProj, false, proj);
+            gl.uniformMatrix4fv(uView, false, mv);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(uTexture, 0);
+
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            gl.disableVertexAttribArray(aTex);
+            gl.deleteBuffer(buf);
         }
+
+        // ===================== WINDOW EVENTS =====================
+        window.addEventListener('resize', () => {
+            if (!loadingStarted) {
+                checkOrientation();
+            }
+            if (canvas) {
+                canvas.width = window.innerWidth * window.devicePixelRatio;
+                canvas.height = window.innerHeight * window.devicePixelRatio;
+            }
+        });
+
+        window.addEventListener('orientationchange', () => {
+            setTimeout(checkOrientation, 300);
+        });
+
+        // ===================== INIT =====================
+        window.addEventListener('load', () => {
+            lockLandscape();
+            checkOrientation();
+        });
+
+        // Handle iOS permission for gyro
+        document.addEventListener('click', () => {
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(state => {
+                    if (state === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                        gyroAvailable = true;
+                    }
+                }).catch(() => {});
+            }
+        }, { once: true });
     </script>
 </body>
 </html>
