@@ -41,9 +41,6 @@
 <script>
 "use strict";
 
-/* ═══════════════════════════════════════════
-   CONFIG
-   ═══════════════════════════════════════════ */
 const PANO_URL = 'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
 const CACHE_KEY = 'vr-pano-v3';
 const GAZE_DUR = 2.0;
@@ -61,44 +58,31 @@ const APP_ICONS = [
     { name:'Settings', url:'https://i.ibb.co/3Y9DYF4J/settings.png', id:'settings' },
 ];
 
-/* ═══════════════════════════════════════════
-   STATE
-   ═══════════════════════════════════════════ */
 let gl, canvas;
 let panoTexture = null;
 let loadDone = false, loadStarted = false;
 
-// Smoothed camera angles (what we actually render)
 let pitch = 0, yaw = 0, roll = 0;
-// Target angles (from gyro/touch)
 let tPitch = 0, tYaw = 0, tRoll = 0;
 
-/* ---- Gyro state ---- */
 let gyroReady = false;
 let gyroCalibrated = false;
 
-// Calibration quaternion (device orientation at start)
-let calQ = { w: 1, x: 0, y: 0, z: 0 };
+// Store raw calibration values
+let calAlpha = 0, calBeta = 0, calGamma = 0;
+let curAlpha = 0, curBeta = 0, curGamma = 0;
 
-// Current device quaternion
-let devQ = { w: 1, x: 0, y: 0, z: 0 };
-
-// Touch fallback
 let dragging = false, dragSX = 0, dragSY = 0, dragYaw0 = 0, dragPitch0 = 0;
 
-// Gaze
 let gazeHit = null, gazeTimer = 0, gazeProg = 0;
 let clockOpen = false;
 
-// Timing
 let prevTime = 0, lastTexTime = 0;
 
-// GL objects
 let sphereVBO, sphereIBO, sphereCount;
 let quadBuf;
 let progPano;
 
-// Textures
 let texCard = null;
 let texApps = [];
 let texAppBGs = [];
@@ -110,86 +94,6 @@ let texReady = false;
 
 let appIconImages = [];
 let appIconsLoaded = 0;
-
-/* ═══════════════════════════════════════════
-   QUATERNION MATH
-   ═══════════════════════════════════════════ */
-function qMul(a, b) {
-    return {
-        w: a.w*b.w - a.x*b.x - a.y*b.y - a.z*b.z,
-        x: a.w*b.x + a.x*b.w + a.y*b.z - a.z*b.y,
-        y: a.w*b.y - a.x*b.z + a.y*b.w + a.z*b.x,
-        z: a.w*b.z + a.x*b.y - a.y*b.x + a.z*b.w
-    };
-}
-
-function qConj(q) {
-    return { w: q.w, x: -q.x, y: -q.y, z: -q.z };
-}
-
-function qNorm(q) {
-    const l = Math.sqrt(q.w*q.w + q.x*q.x + q.y*q.y + q.z*q.z) || 1;
-    return { w: q.w/l, x: q.x/l, y: q.y/l, z: q.z/l };
-}
-
-// Convert ZXY Euler (device orientation) to quaternion
-// alpha = z rotation (compass), beta = x rotation (tilt forward/back), gamma = y rotation (tilt left/right)
-function eulerZXYtoQ(alphaRad, betaRad, gammaRad) {
-    const ca = Math.cos(alphaRad/2), sa = Math.sin(alphaRad/2);
-    const cb = Math.cos(betaRad/2),  sb = Math.sin(betaRad/2);
-    const cg = Math.cos(gammaRad/2), sg = Math.sin(gammaRad/2);
-
-    // Qz * Qx * Qy  (ZXY order)
-    const qz = { w: ca, x: 0,  y: 0,  z: sa };
-    const qx = { w: cb, x: sb, y: 0,  z: 0  };
-    const qy = { w: cg, x: 0,  y: sg, z: 0  };
-
-    return qNorm(qMul(qMul(qz, qx), qy));
-}
-
-// Extract yaw/pitch/roll from relative quaternion for landscape-held phone
-// Phone held landscape: screen facing user, long axis horizontal
-// We want:
-//   turning head left  → scene moves right (yaw increases)
-//   turning head right → scene moves left  (yaw decreases)
-//   tilting up         → scene moves down  (pitch increases)
-//   tilting down       → scene moves up    (pitch decreases)
-function qToVRAngles(q) {
-    // Convert quaternion to rotation matrix, then extract angles
-    // adapted for landscape phone orientation
-    const { w, x, y, z } = q;
-
-    // Standard rotation matrix from quaternion
-    const m00 = 1 - 2*(y*y + z*z);
-    const m01 = 2*(x*y - w*z);
-    const m02 = 2*(x*z + w*y);
-    const m10 = 2*(x*y + w*z);
-    const m11 = 1 - 2*(x*x + z*z);
-    const m12 = 2*(y*z - w*x);
-    const m20 = 2*(x*z - w*y);
-    const m21 = 2*(y*z + w*x);
-    const m22 = 1 - 2*(x*x + y*y);
-
-    // For landscape phone (rotated 90° CCW from portrait):
-    // phone's right axis  = world X (when gamma=0, beta=0)
-    // phone's up axis     = world -Z
-    // phone's screen axis = world Y
-
-    // Extract pitch (up/down tilt) - invert for opposite direction
-    // Extract yaw (left/right turn) - invert for opposite direction
-    // Extract roll (lean left/right) - subtle
-
-    // Yaw: rotation around vertical axis → invert
-    const vrYaw = -Math.atan2(m02, m22);
-
-    // Pitch: forward/back tilt → invert
-    const vrPitch = -Math.asin(Math.max(-1, Math.min(1, -m12)));
-
-    // Roll: lean left/right → invert, subtle
-    const vrRoll = -Math.atan2(m10, m11) * 0.3;
-
-    return { yaw: vrYaw, pitch: vrPitch, roll: vrRoll };
-}
 
 /* ═══════════════════════════════════════════
    ORIENTATION / LOCK
@@ -322,9 +226,6 @@ function imgDone(img, ls) {
     setTimeout(() => { ls.style.display = 'none'; initVR(img); }, 700);
 }
 
-/* ═══════════════════════════════════════════
-   LOAD APP ICONS
-   ═══════════════════════════════════════════ */
 function loadAppIcons() {
     appIconImages = new Array(APP_ICONS.length).fill(null);
     APP_ICONS.forEach((app, i) => {
@@ -494,23 +395,39 @@ function viewMatrix() {
 }
 
 /* ═══════════════════════════════════════════
-   GYROSCOPE — quaternion-based, calibrated at start
-   Fully inverted: device moves left → view goes right, etc.
+   GYROSCOPE — SIMPLE EULER APPROACH FOR LANDSCAPE
+   
+   In landscape mode (phone rotated 90° CCW):
+   - alpha (compass heading) changes when you turn LEFT/RIGHT → this controls YAW
+   - gamma (left/right tilt in portrait) becomes forward/back tilt in landscape → this controls PITCH
+   - beta (forward/back tilt in portrait) becomes left/right lean in landscape → this controls ROLL
+   
+   All INVERTED so:
+   - Phone moves left  → view goes RIGHT
+   - Phone moves right → view goes LEFT
+   - Phone tilts up    → view goes DOWN
+   - Phone tilts down  → view goes UP
+   - Phone leans left  → view leans RIGHT
+   - Phone leans right → view leans LEFT
    ═══════════════════════════════════════════ */
+
+function wrapAngle(a) {
+    while (a > 180) a -= 360;
+    while (a < -180) a += 360;
+    return a;
+}
+
 function handleOrientationEvent(e) {
     if (e.alpha === null || e.beta === null || e.gamma === null) return;
 
-    const D = Math.PI / 180;
-    const alpha = e.alpha * D;   // Z rotation (0-360°, compass)
-    const beta  = e.beta  * D;   // X rotation (-180 to 180°, forward/back tilt)
-    const gamma = e.gamma * D;   // Y rotation (-90 to 90°, left/right tilt)
-
-    // Build current device quaternion from ZXY Euler angles
-    devQ = eulerZXYtoQ(alpha, beta, gamma);
+    curAlpha = e.alpha;
+    curBeta  = e.beta;
+    curGamma = e.gamma;
 
     if (!gyroCalibrated) {
-        // Capture current orientation as "zero" reference
-        calQ = qConj(devQ); // inverse of current = calibration
+        calAlpha = e.alpha;
+        calBeta  = e.beta;
+        calGamma = e.gamma;
         gyroCalibrated = true;
         gyroReady = true;
     }
@@ -537,21 +454,42 @@ function reqGyroPermission() {
 function updateGyro() {
     if (!gyroReady) return;
 
-    // Relative quaternion: difference from calibration pose
-    // relQ = calQ * devQ  (calQ is inverse of initial devQ)
-    const relQ = qNorm(qMul(calQ, devQ));
+    const D = Math.PI / 180;
 
-    // Extract VR camera angles from relative quaternion
-    // All axes inverted so device motion is opposite to view motion
-    const angles = qToVRAngles(relQ);
+    // Delta from calibration
+    let dAlpha = wrapAngle(curAlpha - calAlpha);  // left/right turn (compass)
+    let dBeta  = wrapAngle(curBeta  - calBeta);   // portrait: forward/back tilt
+    let dGamma = curGamma - calGamma;             // portrait: left/right tilt
 
-    tYaw   = angles.yaw;
-    tPitch = angles.pitch;
-    tRoll  = angles.roll;
+    // Clamp gamma delta (gamma range is only -90 to 90)
+    dGamma = Math.max(-80, Math.min(80, dGamma));
 
-    // Clamp pitch to avoid gimbal/crazy zones
-    tPitch = Math.max(-Math.PI * 0.88, Math.min(Math.PI * 0.88, tPitch));
-    tRoll  = Math.max(-0.45, Math.min(0.45, tRoll));
+    /*
+     * LANDSCAPE MAPPING (phone held sideways, long edge horizontal):
+     * 
+     * When phone is in landscape-primary (rotated 90° CCW from portrait):
+     * - Turning phone left/right (yaw) = alpha changes → VR yaw (INVERTED)
+     * - Tilting phone up/down (pitch)   = gamma changes → VR pitch (INVERTED)
+     * - Leaning phone left/right (roll) = beta changes  → VR roll (INVERTED, subtle)
+     *
+     * The key fix: in landscape, the axes swap:
+     *   alpha → yaw   (horizontal rotation, left/right)
+     *   gamma → pitch (vertical tilt, up/down) 
+     *   beta  → roll  (lean/tilt sideways)
+     */
+
+    // YAW: alpha controls horizontal turning — INVERTED
+    tYaw = dAlpha * D;
+
+    // PITCH: gamma controls vertical tilt in landscape — INVERTED
+    tPitch = dGamma * D;
+
+    // ROLL: beta controls sideways lean in landscape — INVERTED, subtle
+    tRoll = -dBeta * D * 0.15;
+
+    // Clamp to safe ranges
+    tPitch = Math.max(-Math.PI * 0.85, Math.min(Math.PI * 0.85, tPitch));
+    tRoll  = Math.max(-0.4, Math.min(0.4, tRoll));
 }
 
 /* ═══════════════════════════════════════════
@@ -571,10 +509,9 @@ function initTouch() {
 
     canvas.addEventListener('touchmove', e => {
         if (dragging && !gyroReady && e.touches.length === 1) {
-            // Invert touch drag too: drag right → view goes left
             tYaw   = dragYaw0   - (e.touches[0].clientX - dragSX) * 0.004;
             tPitch = dragPitch0 - (e.touches[0].clientY - dragSY) * 0.004;
-            tPitch = Math.max(-Math.PI*0.88, Math.min(Math.PI*0.88, tPitch));
+            tPitch = Math.max(-Math.PI*0.85, Math.min(Math.PI*0.85, tPitch));
         }
         e.preventDefault();
     }, { passive: false });
@@ -593,7 +530,7 @@ function initTouch() {
         if (dragging && !gyroReady) {
             tYaw   = dragYaw0   - (e.clientX - dragSX) * 0.004;
             tPitch = dragPitch0 - (e.clientY - dragSY) * 0.004;
-            tPitch = Math.max(-Math.PI*0.88, Math.min(Math.PI*0.88, tPitch));
+            tPitch = Math.max(-Math.PI*0.85, Math.min(Math.PI*0.85, tPitch));
         }
     });
 
@@ -947,7 +884,6 @@ function drawTexQuad(proj, view, pos, w, h, tex) {
 }
 
 function renderEye(proj, view) {
-    // 1) Panorama sphere
     gl.useProgram(progPano);
     gl.disable(gl.DEPTH_TEST);
     const aP = gl.getAttribLocation(progPano, 'aP');
@@ -965,10 +901,8 @@ function renderEye(proj, view) {
     gl.disableVertexAttribArray(aT);
     gl.enable(gl.DEPTH_TEST);
 
-    // 2) Time/Date card
     drawTexQuad(proj, view, [0, 2.2, -5], 4, 1.8, texCard);
 
-    // 3) App icons
     if (!clockOpen) {
         const apps = getAppPositions();
         apps.forEach((a, i) => {
@@ -976,13 +910,11 @@ function renderEye(proj, view) {
         });
     }
 
-    // 4) Clock window
     if (clockOpen && texClockWin) {
         drawTexQuad(proj, view, [0, 0.8, -5], 4, 4, texClockWin);
         drawTexQuad(proj, view, [0, 3.3, -5], 0.5, 0.5, texCloseBtn);
     }
 
-    // 5) Crosshair — fixed in screen center, ignores world view
     gl.disable(gl.DEPTH_TEST);
     const asp2 = (canvas.width / 2) / canvas.height;
     const cP = persp(FOV, asp2, 0.1, 100);
@@ -1001,13 +933,11 @@ function renderFrame() {
 
     const v = viewMatrix();
 
-    // Left eye
     gl.viewport(0, 0, hw, canvas.height);
     const pL = persp(FOV, asp, 0.1, 100);
     const vL = mul(v, tr(I(), IPD*0.5, 0, 0));
     renderEye(pL, vL);
 
-    // Right eye
     gl.viewport(hw, 0, hw, canvas.height);
     const pR = persp(FOV, asp, 0.1, 100);
     const vR = mul(v, tr(I(), -IPD*0.5, 0, 0));
@@ -1022,7 +952,6 @@ function mainLoop(now) {
     const dt = Math.min((now - prevTime) / 1000, 0.1);
     prevTime = now;
 
-    // Init textures once GL is ready
     if (!texReady) {
         updateCardTexture();
         buildAppCardTextures();
@@ -1032,26 +961,21 @@ function mainLoop(now) {
         texReady = true;
     }
 
-    // Periodic texture updates
     if (now - lastTexTime > 400) {
         updateCardTexture();
         if (clockOpen) updateClockTexture();
         lastTexTime = now;
     }
 
-    // Gyro → target angles (quaternion-based, stable)
     updateGyro();
 
-    // Smooth lerp toward target
     pitch += (tPitch - pitch) * CAM_SMOOTH;
     yaw   += (tYaw   - yaw)   * CAM_SMOOTH;
     roll  += (tRoll  - roll)  * TILT_SMOOTH;
 
-    // Gaze
     checkGaze(dt);
     if (gazeHit) buildGazeTexture(gazeProg);
 
-    // Canvas resize guard
     const cw = canvas.clientWidth  * devicePixelRatio;
     const ch = canvas.clientHeight * devicePixelRatio;
     if (canvas.width !== cw || canvas.height !== ch) {
@@ -1062,9 +986,6 @@ function mainLoop(now) {
     renderFrame();
 }
 
-/* ═══════════════════════════════════════════
-   BOOT
-   ═══════════════════════════════════════════ */
 window.addEventListener('load', () => { lockLS(); checkOrient(); });
 </script>
 </body>
