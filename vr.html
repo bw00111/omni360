@@ -31,10 +31,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'In
 #vr-wrap{position:fixed;inset:0;z-index:100;display:none}
 #glc{width:100%;height:100%;display:block}
 #cam{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.001;z-index:-1}
-#embedded-frame-container{position:fixed;top:5%;left:5%;width:90%;height:90%;z-index:10000;display:none;border:2px solid rgba(100,180,255,0.4);border-radius:16px;overflow:hidden;background:#000;box-shadow:0 0 40px rgba(0,100,255,0.3)}
+#embedded-frame-container{position:fixed;top:3%;left:3%;width:94%;height:94%;z-index:10000;display:none;border:2px solid rgba(100,180,255,0.5);border-radius:16px;overflow:hidden;background:rgba(0,0,0,0.95);box-shadow:0 0 60px rgba(0,100,255,0.4)}
 #embedded-frame-container iframe{width:100%;height:100%;border:none}
-#embedded-close-btn{position:absolute;top:8px;right:8px;width:36px;height:36px;background:rgba(255,40,40,0.7);border:none;border-radius:50%;color:#fff;font-size:20px;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;font-weight:bold;line-height:1}
-#embedded-close-btn:hover{background:rgba(255,40,40,0.95)}
+#embedded-close-btn{position:absolute;top:10px;right:10px;width:40px;height:40px;background:rgba(255,40,40,0.8);border:2px solid rgba(255,255,255,0.3);border-radius:50%;color:#fff;font-size:22px;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;font-weight:bold;line-height:1}
+#embedded-close-btn:active{background:rgba(255,40,40,1);transform:scale(0.9)}
 </style>
 </head>
 <body>
@@ -44,15 +44,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'In
 <video id="cam" playsinline autoplay muted></video>
 <div id="embedded-frame-container">
 <button id="embedded-close-btn" onclick="closeEmbeddedFrame()">✕</button>
-<iframe id="embedded-iframe" src="about:blank"></iframe>
+<iframe id="embedded-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
 </div>
 <script>
 "use strict";
 const PANO_URL='https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
-const CACHE_KEY='vr-pano-v7';
+const CACHE_KEY='vr-pano-v8';
 const GAZE_DUR=2.0;
 let vrSettings={fov:80,ipd:62,screenDist:40,oversample:1.0};
-const CAM_SMOOTH=0.25;
+const CAM_SMOOTH=0.3;
 const APP_ICONS=[
 {name:'VR',url:'https://i.ibb.co/fdmh5byd/vr.png',id:'vr'},
 {name:'Camera',url:'https://i.ibb.co/1fFjzT3p/camera.png',id:'camera'},
@@ -105,11 +105,20 @@ let needAppRebuild=false;
 let needSettingsRebuild=false;
 let needPrefsRebuild=false;
 let embeddedFrameOpen=false;
-// Pre-allocated reusable arrays
 const _quadVerts=new Float32Array([-.5,-.5,0,0,1,.5,-.5,0,1,1,.5,.5,0,1,0,-.5,-.5,0,0,1,.5,.5,0,1,0,-.5,.5,0,0,0]);
-// Reusable canvases to avoid GC
 let _cardCanvas=null,_cardCtx=null;
 let _camCanvas=null,_camCtx=null;
+
+// Spotlight system: projects a cone from eye through the hand tracking overlay
+// The spotlight center follows the pinch midpoint when hands detected,
+// otherwise stays at screen center (gaze). The spotlight has a radius
+// that expands/contracts based on hand presence.
+let spotlightX=0,spotlightY=0; // NDC coords (-1 to 1)
+let spotlightRadius=0.05; // in NDC space
+let spotlightTargetRadius=0.05;
+let spotlightActive=false; // true when hands detected
+let spotlightPinchNDC=null; // {x,y} in NDC when pinching
+
 function openEmbeddedFrame(url){
 document.getElementById('embedded-iframe').src=url;
 document.getElementById('embedded-frame-container').style.display='block';
@@ -219,7 +228,7 @@ handSendPending=true;
 try{await mpHands.send({image:camVideo})}catch(e){}
 handSendPending=false;
 }
-setTimeout(loop,33);
+setTimeout(loop,40);
 }
 loop();
 }
@@ -253,20 +262,50 @@ leftPinchPoint=getPinchMid(leftHandLandmarks);
 rightPinchPoint=getPinchMid(rightHandLandmarks);
 pinchClickLeft=leftPinch&&!prevLeftPinch;
 pinchClickRight=rightPinch&&!prevRightPinch;
+
+// Update spotlight based on hand presence
+const hasHands=!!(leftHandLandmarks||rightHandLandmarks);
+spotlightActive=hasHands;
+
+if(hasHands){
+// Use the pinch midpoint of the most active hand as spotlight center
+const activePt=leftPinchPoint||rightPinchPoint;
+if(activePt){
+// Convert from camera space (0-1, mirrored) to NDC (-1 to 1)
+spotlightX=-(activePt.x-0.5)*2;
+spotlightY=-(activePt.y-0.5)*2;
 }
+spotlightTargetRadius=0.12;
+}else{
+spotlightX=0;
+spotlightY=0;
+spotlightTargetRadius=0.04;
+}
+spotlightRadius+=(spotlightTargetRadius-spotlightRadius)*0.15;
+}
+
 /*
-GYROSCOPE — INVERTED for VR headset viewing:
-Head moves UP → pano moves DOWN (pitch inverted)
-Head turns LEFT → pano moves RIGHT (yaw inverted)
+GYROSCOPE for landscape-primary VR headset viewing.
+Phone in landscape, screen facing user's eyes.
 
-In landscape-primary (angle=90), phone held sideways:
-Device rotationRate:
-  alpha = around device Z (screen normal) → VR roll
-  beta  = around device X → in landscape = up/down tilt → VR pitch
-  gamma = around device Y → in landscape = left/right turn → VR yaw
+rotationRate (deg/s) in DEVICE coords:
+  alpha = around Z (screen normal)
+  beta  = around X (portrait short axis)
+  gamma = around Y (portrait long axis)
 
-INVERTED: When head goes up, we want scene to go down = pitch increases
-         When head turns left, we want scene to go right = yaw increases
+In landscape-primary (90° CCW from portrait):
+  Screen horizontal = device Y axis
+  Screen vertical = device X axis (inverted)
+  Screen normal = device Z axis
+
+User head movements → desired VR response:
+  Turn head LEFT/RIGHT → rotate around screen vertical (device X) → beta
+    Head left = beta positive → yaw should increase (look left, scene goes right)
+  Tilt head UP/DOWN → rotate around screen horizontal (device Y) → gamma
+    Head up = gamma changes → pitch
+  NO ROLL (disabled as requested)
+
+Inverted for VR: head up → scene down, head left → scene right
 */
 function getLandscapeFlip(){
 let angle=0;
@@ -284,20 +323,23 @@ const dtS=(now-lastGyroTime)/1000;
 lastGyroTime=now;
 if(dtS<=0||dtS>0.2)return;
 const D2R=Math.PI/180;
-const rAlpha=rr.alpha*D2R;
 const rBeta=rr.beta*D2R;
 const rGamma=rr.gamma*D2R;
 const flip=getLandscapeFlip();
-// INVERTED: head up → pano down, head left → pano right
-// gamma = device Y rotation = left/right in landscape → YAW (inverted)
-tYaw += -rGamma * dtS * flip;
-// beta = device X rotation = up/down in landscape → PITCH (inverted)
-tPitch += rBeta * dtS * flip;
-// alpha = device Z rotation = roll (damped)
-tRoll += -rAlpha * dtS * flip * 0.2;
+
+// YAW: head turn left/right = beta (device X rotation in landscape)
+// Inverted: head left → scene right
+tYaw += rBeta * dtS * flip;
+
+// PITCH: head tilt up/down = gamma (device Y rotation in landscape)  
+// Inverted: head up → scene down
+tPitch += rGamma * dtS * flip;
+
+// ROLL: DISABLED as requested
+// tRoll stays at 0
+
 tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
-tRoll=Math.max(-0.5,Math.min(0.5,tRoll));
-tRoll*=0.96;
+tRoll=0; // Force no roll
 gyroReady=true;
 }
 function initGyro(){
@@ -324,7 +366,6 @@ buildShaders();buildSphere(40,40,50);
 quadVBO=gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);
 gl.bufferData(gl.ARRAY_BUFFER,_quadVerts,gl.STATIC_DRAW);
-// Cache uniform/attrib locations
 progPano._aP=gl.getAttribLocation(progPano,'aP');
 progPano._aT=gl.getAttribLocation(progPano,'aT');
 progPano._uProj=gl.getUniformLocation(progPano,'uProj');
@@ -373,7 +414,7 @@ function tr(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mul(m,t)}
 function sc(m,x,y,z){const s=I();s[0]=x;s[5]=y;s[10]=z;return mul(m,s)}
 function viewMatrix(){
 let m=I();
-m=rZ(m,roll);
+// No roll - disabled
 m=rX(m,pitch);
 m=rY(m,yaw);
 return m;
@@ -389,7 +430,6 @@ e.preventDefault();
 },{passive:false});
 canvas.addEventListener('touchmove',e=>{
 if(dragging&&!gyroReady&&e.touches.length===1){
-// Inverted: drag right → look left, drag up → look down
 tYaw=dragYaw0+(e.touches[0].clientX-dragSX)*0.004;
 tPitch=dragPitch0-(e.touches[0].clientY-dragSY)*0.004;
 tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
@@ -536,6 +576,37 @@ if(texCamView){updateTex(texCamView,_camCanvas)}else{texCamView=mkTex(_camCanvas
 }
 const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 const FINGER_COLORS=['#ff4466','#ffaa00','#44ff66','#4488ff','#cc44ff'];
+
+let spotlightTex=null;
+function buildSpotlightTexture(){
+const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
+// Draw spotlight cone visualization
+const cx2=128,cy2=128;
+const r=spotlightRadius*256*4; // scale for visibility
+// Outer glow
+const grd=x.createRadialGradient(cx2,cy2,0,cx2,cy2,r*1.5);
+grd.addColorStop(0,'rgba(0,180,255,0.15)');
+grd.addColorStop(0.6,'rgba(0,180,255,0.05)');
+grd.addColorStop(1,'rgba(0,0,0,0)');
+x.fillStyle=grd;x.fillRect(0,0,256,256);
+// Ring
+x.strokeStyle=spotlightActive?'rgba(0,200,255,0.6)':'rgba(255,255,255,0.3)';
+x.lineWidth=spotlightActive?3:2;
+x.beginPath();x.arc(cx2,cy2,Math.max(r*0.8,15),0,Math.PI*2);x.stroke();
+// Inner dot
+x.fillStyle=spotlightActive?'rgba(0,255,200,0.8)':'rgba(255,255,255,0.5)';
+x.beginPath();x.arc(cx2,cy2,4,0,Math.PI*2);x.fill();
+// Crosshair lines
+x.strokeStyle=`rgba(255,255,255,${spotlightActive?0.4:0.3})`;
+x.lineWidth=1;
+const lr=Math.max(r*0.8,15);
+[[cx2,cy2-lr-5,cx2,cy2-lr+8],[cx2,cy2+lr-8,cx2,cy2+lr+5],[cx2-lr-5,cy2,cx2-lr+8,cy2],[cx2+lr-8,cy2,cx2+lr+5,cy2]].forEach(([x1,y1,x2,y2])=>{
+x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke();
+});
+if(spotlightTex)gl.deleteTexture(spotlightTex);
+spotlightTex=mkTex(c);
+}
+
 function buildCombinedHandTexture(){
 if(!leftHandLandmarks&&!rightHandLandmarks){
 if(handTexCombined){gl.deleteTexture(handTexCombined);handTexCombined=null}
@@ -617,24 +688,36 @@ const t=pos[2]/(-dir[2]);if(t<0)return false;
 const hx=dir[0]*t,hy=dir[1]*t;
 return hx>=pos[0]-w/2&&hx<=pos[0]+w/2&&hy>=pos[1]-h/2&&hy<=pos[1]+h/2;
 }
-function pinchRayHit(pinchPt,pos,w,h){
-if(!pinchPt)return false;
+
+// Cast a ray from the spotlight position through the 3D scene
+// spotlightX, spotlightY are in NDC (-1 to 1)
+function spotlightRayDir(sx,sy){
 const fovRad=vrSettings.fov*Math.PI/180;
 const asp=(canvas.width/2)/canvas.height;
 const halfFovTan=Math.tan(fovRad/2);
-// Pinch point from camera is mirrored, so we mirror X
-const ndcX=-(pinchPt.x-0.5)*2;
-const ndcY=-(pinchPt.y-0.5)*2;
-const rx=ndcX*halfFovTan*asp;
-const ry=ndcY*halfFovTan;
+const rx=sx*halfFovTan*asp;
+const ry=sy*halfFovTan;
 const rz=-1;
 const len=Math.sqrt(rx*rx+ry*ry+rz*rz);
+// Transform ray by inverse view (yaw then pitch)
 const cy2=Math.cos(yaw),sy2=Math.sin(yaw);
 const cp2=Math.cos(pitch),sp2=Math.sin(pitch);
-const dx1=rx/len,dy1=(ry*cp2-rz*sp2)/len,dz1=(ry*sp2+rz*cp2)/len;
-const dx=dx1*cy2+dz1*sy2,dy=dy1,dz=-dx1*sy2+dz1*cy2;
-return hitQuad([dx,dy,dz],pos,w,h);
+const lx=rx/len,ly=ry/len,lz=rz/len;
+// Undo pitch (rotate around X by -pitch)
+const ly2=ly*cp2-lz*sp2;
+const lz2=ly*sp2+lz*cp2;
+// Undo yaw (rotate around Y by -yaw)
+const dx=lx*cy2+lz2*sy2;
+const dy=ly2;
+const dz=-lx*sy2+lz2*cy2;
+return[dx,dy,dz];
 }
+
+function spotlightHitQuad(pos,w,h){
+const dir=spotlightRayDir(spotlightX,spotlightY);
+return hitQuad(dir,pos,w,h);
+}
+
 function adjustSetting(key,delta){
 const defs={fov:{min:50,max:120,step:2},ipd:{min:50,max:80,step:1},dist:{min:20,max:80,step:1},os:{min:0.5,max:2.0,step:0.1}};
 const d=defs[key];if(!d)return;
@@ -648,6 +731,8 @@ if(id==='camera')openEmbeddedFrame('camera.html');
 else if(id==='reader')openEmbeddedFrame('reader.html');
 else if(id==='gallery')openEmbeddedFrame('gallery.html');
 else if(id==='settings'){settingsOpen=!settingsOpen;cameraAppOpen=false}
+else if(id==='vr'){/* VR app - do nothing special */}
+else if(id==='ai'){/* AI app placeholder */}
 }
 function triggerAction(id){
 if(id==='prefs'){settingsOpen=!settingsOpen;cameraAppOpen=false;needSettingsRebuild=true}
@@ -656,9 +741,8 @@ else if(id==='settings_close'){settingsOpen=false}
 else if(id.endsWith('_dec')){adjustSetting(id.replace('_dec',''),-1)}
 else if(id.endsWith('_inc')){adjustSetting(id.replace('_inc',''),1)}
 }
-function checkGaze(dt){
-const dir=gazeDir();
-let hit=null;
+
+function getInteractables(){
 let interactables=[];
 if(cameraAppOpen){
 interactables.push({id:'close',...getClosePos()});
@@ -669,25 +753,37 @@ getAppPositions().forEach(a=>interactables.push({id:a.id,pos:a.pos,w:a.w,h:a.h})
 const pp=getPrefsPos();
 interactables.push({id:'prefs',pos:pp.pos,w:pp.w,h:pp.h});
 }
+return interactables;
+}
+
+function doTrigger(id){
+if(['close','prefs','settings_close'].includes(id)||id.endsWith('_dec')||id.endsWith('_inc')){
+triggerAction(id);
+}else{
+triggerApp(id);
+}
+}
+
+function checkGaze(dt){
+const dir=gazeDir();
+let hit=null;
+const interactables=getInteractables();
+
 for(const item of interactables){
 if(hitQuad(dir,item.pos,item.w,item.h)){hit=item.id;break}
 }
-// Pinch click detection
+
+// Pinch click: cast ray from spotlight position through scene depth
 if(pinchClickLeft||pinchClickRight){
-const pt=pinchClickLeft?leftPinchPoint:rightPinchPoint;
-if(pt){
 for(const item of interactables){
-if(pinchRayHit(pt,item.pos,item.w,item.h)){
-if(['close','prefs','settings_close'].includes(item.id)||item.id.endsWith('_dec')||item.id.endsWith('_inc')){
-triggerAction(item.id);
-}else{
-triggerApp(item.id);
-}
-gazeTimer=0;gazeProg=0;gazeHit=null;return;
+if(spotlightHitQuad(item.pos,item.w,item.h)){
+doTrigger(item.id);
+gazeTimer=0;gazeProg=0;gazeHit=null;
+return;
 }
 }
 }
-}
+
 let anyChanged=false;
 for(const key in hoverStates){
 const hs=hoverStates[key];
@@ -701,8 +797,7 @@ if(hit){
 if(gazeHit===hit){
 gazeTimer+=dt;gazeProg=Math.min(gazeTimer/GAZE_DUR,1.0);
 if(gazeTimer>=GAZE_DUR){
-if(['close','prefs','settings_close'].includes(hit)||hit.endsWith('_dec')||hit.endsWith('_inc'))triggerAction(hit);
-else triggerApp(hit);
+doTrigger(hit);
 gazeTimer=0;gazeProg=0;gazeHit=null;
 }
 }else{gazeHit=hit;gazeTimer=0;gazeProg=0}
@@ -742,12 +837,23 @@ const apps=getAppPositions();
 apps.forEach((a,i)=>{if(texAppBGs[i])drawTexQuad(proj,view,a.pos,a.w,a.h,texAppBGs[i])});
 const pp=getPrefsPos();if(texPrefsBtn)drawTexQuad(proj,view,pp.pos,pp.w,pp.h,texPrefsBtn);
 }
+// HUD overlay (hand tracking + spotlight + crosshair) rendered in screen space
 gl.disable(gl.DEPTH_TEST);
 const fovRad=vrSettings.fov*Math.PI/180;
 const asp2=(canvas.width/2)/canvas.height;
 const cP=persp(fovRad,asp2,0.01,100);
 const cV=I();
+// Hand skeleton overlay
 if(handTexCombined)drawTexQuad(cP,cV,[0,-0.15,-1.5],1.2,1.2,handTexCombined);
+// Spotlight indicator at spotlight position
+if(spotlightTex){
+const spSize=spotlightRadius*3;
+const spZ=-1.5;
+const spWorldX=spotlightX*Math.tan(fovRad/2)*asp2*Math.abs(spZ);
+const spWorldY=spotlightY*Math.tan(fovRad/2)*Math.abs(spZ);
+drawTexQuad(cP,cV,[spWorldX,spWorldY,spZ],spSize,spSize,spotlightTex);
+}
+// Crosshair / gaze ring at center
 const crossTex=gazeHit?texGazeRing:texCrosshair;
 const crossSize=gazeHit?0.18:0.1;
 drawTexQuad(cP,cV,[0,0,-1.5],crossSize,crossSize,crossTex);
@@ -771,21 +877,23 @@ frameCount++;
 if(!texReady){
 updateCardTexture();buildAppCardTextures();buildCrosshairTexture();
 buildGazeTexture(0);buildCloseTexture();buildPrefsButton();buildSettingsPanel();
+buildSpotlightTexture();
 texReady=true;
 }
-// Update textures less frequently
 if(now-lastTexTime>500){
 updateCardTexture();
 if(cameraAppOpen)updateCameraTexture();
 lastTexTime=now;
 }
-// Direct assignment for zero-lag gyro response
 pitch+=(tPitch-pitch)*CAM_SMOOTH;
 yaw+=(tYaw-yaw)*CAM_SMOOTH;
-roll+=(tRoll-roll)*0.08;
+roll=0; // No roll
+
 updateHandState();
-// Only rebuild hand texture every other frame
-if(frameCount%2===0)buildCombinedHandTexture();
+if(frameCount%2===0){
+buildCombinedHandTexture();
+buildSpotlightTexture();
+}
 checkGaze(dt);
 if(gazeHit&&frameCount%3===0)buildGazeTexture(gazeProg);
 if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
