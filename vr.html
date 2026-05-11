@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>VR Experience</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#rotate-screen{position:fixed;inset:0;z-index:99999;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s}
+.phone-box{width:56px;height:96px;border:2.5px solid rgba(255,255,255,.65);border-radius:13px;position:relative;animation:rotP 2.8s ease-in-out infinite;margin-bottom:22px}
+.phone-box::before{content:'';position:absolute;top:5px;left:50%;transform:translateX(-50%);width:16px;height:2.5px;background:rgba(255,255,255,.35);border-radius:2px}
+.phone-box::after{content:'';position:absolute;bottom:5px;left:50%;transform:translateX(-50%);width:12px;height:12px;border:1.5px solid rgba(255,255,255,.4);border-radius:50%}
+@keyframes rotP{0%,18%{transform:rotate(0)}38%,68%{transform:rotate(90deg)}88%,100%{transform:rotate(0)}}
+#rotate-screen p{font-size:17px;font-weight:300;letter-spacing:.4px;opacity:.8}
+#rotate-screen .sub{font-size:12px;opacity:.4;margin-top:8px}
+#loading-screen{position:fixed;inset:0;z-index:9998;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:none;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s}
+.goggles{position:relative;width:96px;height:48px;margin-bottom:26px}
+.lens{position:absolute;width:38px;height:38px;border:2.5px solid rgba(255,255,255,.2);border-radius:50%;top:5px}
+.lens:nth-child(1){left:2px}
+.lens:nth-child(2){right:2px}
+.lens::after{content:'';position:absolute;inset:7px;border:2px solid rgba(255,255,255,.8);border-radius:50%;border-right-color:transparent;animation:sp .9s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.goggles::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:12px;height:8px;background:rgba(255,255,255,.15);border-radius:2px}
+.ld-label{font-size:18px;letter-spacing:3px;font-weight:300;opacity:.7;margin-bottom:14px}
+.bar-bg{width:200px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden}
+.bar-fg{height:100%;width:0;background:linear-gradient(90deg,#00b4ff,#6a30ff);border-radius:2px;transition:width .2s}
+.ld-pct{font-size:11px;opacity:.35;margin-top:10px;letter-spacing:1px}
+.ld-sub{font-size:10px;opacity:.25;margin-top:6px;letter-spacing:.5px}
+#vr-wrap{position:fixed;inset:0;z-index:100;display:none}
+#glc{width:100%;height:100%;display:block}
+#cam{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.001;z-index:-1}
+#embedded-frame-container{position:fixed;top:3%;left:3%;width:94%;height:94%;z-index:10000;display:none;border:2px solid rgba(100,180,255,0.5);border-radius:16px;overflow:hidden;background:rgba(0,0,0,0.95);box-shadow:0 0 60px rgba(0,100,255,0.4)}
+#embedded-frame-container iframe{width:100%;height:100%;border:none}
+#embedded-close-btn{position:absolute;top:10px;right:10px;width:40px;height:40px;background:rgba(255,40,40,0.8);border:2px solid rgba(255,255,255,0.3);border-radius:50%;color:#fff;font-size:22px;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;font-weight:bold;line-height:1}
+#embedded-close-btn:active{background:rgba(255,40,40,1);transform:scale(0.9)}
+</style>
+</head>
+<body>
+<div id="rotate-screen"><div class="phone-box"></div><p>Rotate your phone to landscape</p><div class="sub">Then tap anywhere to start</div></div>
+<div id="loading-screen"><div class="goggles"><div class="lens"></div><div class="lens"></div></div><div class="ld-label">LOADING VR</div><div class="bar-bg"><div class="bar-fg" id="bar-fg"></div></div><div class="ld-pct" id="ld-pct">0%</div><div class="ld-sub" id="ld-sub"></div></div>
+<div id="vr-wrap"><canvas id="glc"></canvas></div>
+<video id="cam" playsinline autoplay muted></video>
+<div id="embedded-frame-container">
+<button id="embedded-close-btn" onclick="closeEmbeddedFrame()">✕</button>
+<iframe id="embedded-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
+</div>
+<script>
+"use strict";
+const PANO_URL='https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
+const CACHE_KEY='vr-pano-v8';
+const GAZE_DUR=2.0;
+let vrSettings={fov:80,ipd:62,screenDist:40,oversample:1.0};
+const CAM_SMOOTH=0.3;
+const APP_ICONS=[
+{name:'VR',url:'https://i.ibb.co/fdmh5byd/vr.png',id:'vr'},
+{name:'Camera',url:'https://i.ibb.co/1fFjzT3p/camera.png',id:'camera'},
+{name:'Gallery',url:'https://i.ibb.co/7Nd41XyX/gallery.png',id:'gallery'},
+{name:'AI',url:'https://i.ibb.co/N62BHcnc/ai.png',id:'ai'},
+{name:'Reader',url:'https://i.ibb.co/KxqC6ZR5/reading.png',id:'reader'},
+{name:'Settings',url:'https://i.ibb.co/3Y9DYF4J/settings.png',id:'settings'},
+];
+let gl,canvas;
+let panoTexture=null;
+let loadDone=false,loadStarted=false;
+let pitch=0,yaw=0,roll=0;
+let tPitch=0,tYaw=0,tRoll=0;
+let gyroReady=false;
+let lastGyroTime=0;
+let dragging=false,dragSX=0,dragSY=0,dragYaw0=0,dragPitch0=0;
+let gazeHit=null,gazeTimer=0,gazeProg=0;
+let prevTime=0,lastTexTime=0;
+let sphereVBO,sphereIBO,sphereCount;
+let quadVBO;
+let progPano;
+let texCard=null,texAppBGs=[],texCrosshair=null,texGazeRing=null;
+let texReady=false;
+let appIconImages=[],appIconsLoaded=0;
+let cameraAppOpen=false;
+let settingsOpen=false;
+let texCamView=null;
+let texCloseBtn=null;
+let texSettingsPanel=null;
+let texPrefsBtn=null;
+let camVideo=null;
+let camReady=false;
+let handTrackingReady=false;
+let leftHandLandmarks=null,rightHandLandmarks=null;
+let leftPinch=false,rightPinch=false;
+let leftPinchPoint=null,rightPinchPoint=null;
+let prevLeftPinch=false,prevRightPinch=false;
+let handTexCombined=null;
+let pinchClickLeft=false,pinchClickRight=false;
+let mpHands=null;
+let handCanvas=null,handCtx=null;
+let hoverStates={};
+APP_ICONS.forEach(a=>{hoverStates[a.id]={hover:false,prog:0}});
+hoverStates['prefs']={hover:false,prog:0};
+hoverStates['close']={hover:false,prog:0};
+['fov_dec','fov_inc','ipd_dec','ipd_inc','dist_dec','dist_inc','os_dec','os_inc','settings_close'].forEach(k=>{
+hoverStates[k]={hover:false,prog:0};
+});
+let needAppRebuild=false;
+let needSettingsRebuild=false;
+let needPrefsRebuild=false;
+let embeddedFrameOpen=false;
+const _quadVerts=new Float32Array([-.5,-.5,0,0,1,.5,-.5,0,1,1,.5,.5,0,1,0,-.5,-.5,0,0,1,.5,.5,0,1,0,-.5,.5,0,0,0]);
+let _cardCanvas=null,_cardCtx=null;
+let _camCanvas=null,_camCtx=null;
+
+// Spotlight system: projects a cone from eye through the hand tracking overlay
+// The spotlight center follows the pinch midpoint when hands detected,
+// otherwise stays at screen center (gaze). The spotlight has a radius
+// that expands/contracts based on hand presence.
+let spotlightX=0,spotlightY=0; // NDC coords (-1 to 1)
+let spotlightRadius=0.05; // in NDC space
+let spotlightTargetRadius=0.05;
+let spotlightActive=false; // true when hands detected
+let spotlightPinchNDC=null; // {x,y} in NDC when pinching
+
+function openEmbeddedFrame(url){
+document.getElementById('embedded-iframe').src=url;
+document.getElementById('embedded-frame-container').style.display='block';
+embeddedFrameOpen=true;
+}
+function closeEmbeddedFrame(){
+document.getElementById('embedded-frame-container').style.display='none';
+document.getElementById('embedded-iframe').src='about:blank';
+embeddedFrameOpen=false;
+}
+function lockLS(){try{screen.orientation.lock('landscape-primary').catch(()=>{})}catch(e){}}
+function isLS(){return innerWidth>innerHeight}
+function checkOrient(){
+const el=document.getElementById('rotate-screen');
+if(isLS()){el.style.opacity='0';setTimeout(()=>{el.style.display='none';beginLoad()},550)}
+else{el.style.display='flex';el.style.opacity='1'}
+}
+window.addEventListener('resize',()=>{checkOrient();if(canvas)resizeCanvas()});
+window.addEventListener('orientationchange',()=>setTimeout(checkOrient,350));
+function resizeCanvas(){
+const os=vrSettings.oversample;
+canvas.width=Math.floor(innerWidth*devicePixelRatio*os);
+canvas.height=Math.floor(innerHeight*devicePixelRatio*os);
+}
+function beginLoad(){
+if(loadStarted)return;loadStarted=true;
+const ls=document.getElementById('loading-screen');ls.style.display='flex';
+const bf=document.getElementById('bar-fg'),pct=document.getElementById('ld-pct'),sub=document.getElementById('ld-sub');
+loadAppIcons();initCamera();loadHandModel(sub);
+if('caches' in window){
+caches.open(CACHE_KEY).then(c=>{c.match(PANO_URL).then(r=>{if(r)r.blob().then(b=>fromBlob(b,bf,pct,ls));else fetchImg(c,bf,pct,ls)})}).catch(()=>directLoad(bf,pct,ls));
+}else directLoad(bf,pct,ls);
+}
+function fetchImg(cache,bf,pct,ls){
+const xhr=new XMLHttpRequest();xhr.open('GET',PANO_URL,true);xhr.responseType='blob';
+xhr.onprogress=e=>{if(e.lengthComputable){const p=e.loaded/e.total*100;bf.style.width=p+'%';pct.textContent=Math.round(p)+'%'}};
+xhr.onload=()=>{if(xhr.status===200){const blob=xhr.response;cache.put(PANO_URL,new Response(blob.slice(0)));fromBlob(blob,bf,pct,ls)}else directLoad(bf,pct,ls)};
+xhr.onerror=()=>directLoad(bf,pct,ls);xhr.send();
+}
+function fromBlob(blob,bf,pct,ls){
+const url=URL.createObjectURL(blob);const img=new Image();img.crossOrigin='anonymous';
+img.onload=()=>{bf.style.width='100%';pct.textContent='100%';setTimeout(()=>imgDone(img,ls),450)};
+img.onerror=()=>directLoad(bf,pct,ls);img.src=url;
+}
+function directLoad(bf,pct,ls){
+const img=new Image();img.crossOrigin='anonymous';let p=0;
+const iv=setInterval(()=>{p=Math.min(p+2,90);bf.style.width=p+'%';pct.textContent=Math.round(p)+'%'},70);
+img.onload=()=>{clearInterval(iv);bf.style.width='100%';pct.textContent='100%';setTimeout(()=>imgDone(img,ls),450)};
+img.onerror=()=>{clearInterval(iv);
+const c=document.createElement('canvas');c.width=2048;c.height=1024;const cx=c.getContext('2d');
+const grd=cx.createLinearGradient(0,0,2048,1024);grd.addColorStop(0,'#0a0a3a');grd.addColorStop(0.5,'#0c1e4a');grd.addColorStop(1,'#0a0a3a');
+cx.fillStyle=grd;cx.fillRect(0,0,2048,1024);
+for(let i=0;i<300;i++){cx.fillStyle=`rgba(255,255,255,${Math.random()*0.5+0.1})`;cx.beginPath();cx.arc(Math.random()*2048,Math.random()*1024,Math.random()*1.5+0.3,0,Math.PI*2);cx.fill()}
+bf.style.width='100%';pct.textContent='100%';setTimeout(()=>imgDone(c,ls),450)};
+img.src=PANO_URL;
+}
+function imgDone(img,ls){loadDone=true;ls.style.opacity='0';setTimeout(()=>{ls.style.display='none';initVR(img)},700)}
+function loadAppIcons(){
+appIconImages=new Array(APP_ICONS.length).fill(null);
+APP_ICONS.forEach((app,i)=>{const img=new Image();img.crossOrigin='anonymous';
+img.onload=()=>{appIconImages[i]=img;appIconsLoaded++;if(texReady)needAppRebuild=true};
+img.onerror=()=>{appIconsLoaded++};img.src=app.url});
+}
+function initCamera(){
+camVideo=document.getElementById('cam');
+navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:320},height:{ideal:240}},audio:false})
+.then(stream=>{camVideo.srcObject=stream;camVideo.onloadedmetadata=()=>{camVideo.play();camReady=true}})
+.catch(()=>{
+navigator.mediaDevices.getUserMedia({video:{width:{ideal:320},height:{ideal:240}},audio:false})
+.then(stream=>{camVideo.srcObject=stream;camVideo.onloadedmetadata=()=>{camVideo.play();camReady=true}})
+.catch(()=>{})
+});
+}
+function loadHandModel(subEl){
+if(subEl)subEl.textContent='Loading hand tracking...';
+const s1=document.createElement('script');
+s1.src='https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js';
+s1.crossOrigin='anonymous';
+s1.onload=()=>{
+const s2=document.createElement('script');
+s2.src='https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js';
+s2.crossOrigin='anonymous';
+s2.onload=()=>{if(subEl)subEl.textContent='Initializing hands...';initHandTracking(subEl)};
+s2.onerror=()=>{if(subEl)subEl.textContent='Hand tracking unavailable'};
+document.head.appendChild(s2);
+};
+s1.onerror=()=>{if(subEl)subEl.textContent='Hand tracking unavailable'};
+document.head.appendChild(s1);
+}
+function initHandTracking(subEl){
+try{
+mpHands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`});
+mpHands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:0.35,minTrackingConfidence:0.25});
+mpHands.onResults(onHandResults);
+handTrackingReady=true;
+if(subEl)subEl.textContent='Hand tracking ready';
+startHandLoop();
+}catch(e){if(subEl)subEl.textContent='Hand tracking error'}
+}
+let handLoopRunning=false;
+let handSendPending=false;
+function startHandLoop(){
+if(handLoopRunning)return;handLoopRunning=true;
+async function loop(){
+if(camReady&&mpHands&&camVideo.readyState>=2&&!handSendPending){
+handSendPending=true;
+try{await mpHands.send({image:camVideo})}catch(e){}
+handSendPending=false;
+}
+setTimeout(loop,40);
+}
+loop();
+}
+function onHandResults(results){
+leftHandLandmarks=null;rightHandLandmarks=null;
+if(results.multiHandLandmarks&&results.multiHandedness){
+for(let i=0;i<results.multiHandLandmarks.length;i++){
+const hand=results.multiHandedness[i];
+const lm=results.multiHandLandmarks[i];
+if(hand.label==='Right')leftHandLandmarks=lm;
+else rightHandLandmarks=lm;
+}
+}
+}
+function getPinchDist(landmarks){
+if(!landmarks)return 999;
+const t=landmarks[4],idx=landmarks[8];
+return Math.sqrt((t.x-idx.x)**2+(t.y-idx.y)**2+(t.z-idx.z)**2);
+}
+function getPinchMid(landmarks){
+if(!landmarks)return null;
+const t=landmarks[4],idx=landmarks[8];
+return{x:(t.x+idx.x)/2,y:(t.y+idx.y)/2,z:(t.z+idx.z)/2};
+}
+function updateHandState(){
+const PINCH_THRESH=0.07;
+prevLeftPinch=leftPinch;prevRightPinch=rightPinch;
+leftPinch=getPinchDist(leftHandLandmarks)<PINCH_THRESH;
+rightPinch=getPinchDist(rightHandLandmarks)<PINCH_THRESH;
+leftPinchPoint=getPinchMid(leftHandLandmarks);
+rightPinchPoint=getPinchMid(rightHandLandmarks);
+pinchClickLeft=leftPinch&&!prevLeftPinch;
+pinchClickRight=rightPinch&&!prevRightPinch;
+
+// Update spotlight based on hand presence
+const hasHands=!!(leftHandLandmarks||rightHandLandmarks);
+spotlightActive=hasHands;
+
+if(hasHands){
+// Use the pinch midpoint of the most active hand as spotlight center
+const activePt=leftPinchPoint||rightPinchPoint;
+if(activePt){
+// Convert from camera space (0-1, mirrored) to NDC (-1 to 1)
+spotlightX=-(activePt.x-0.5)*2;
+spotlightY=-(activePt.y-0.5)*2;
+}
+spotlightTargetRadius=0.12;
+}else{
+spotlightX=0;
+spotlightY=0;
+spotlightTargetRadius=0.04;
+}
+spotlightRadius+=(spotlightTargetRadius-spotlightRadius)*0.15;
+}
+
+/*
+GYROSCOPE for landscape-primary VR headset viewing.
+Phone in landscape, screen facing user's eyes.
+
+rotationRate (deg/s) in DEVICE coords:
+  alpha = around Z (screen normal)
+  beta  = around X (portrait short axis)
+  gamma = around Y (portrait long axis)
+
+In landscape-primary (90° CCW from portrait):
+  Screen horizontal = device Y axis
+  Screen vertical = device X axis (inverted)
+  Screen normal = device Z axis
+
+User head movements → desired VR response:
+  Turn head LEFT/RIGHT → rotate around screen vertical (device X) → beta
+    Head left = beta positive → yaw should increase (look left, scene goes right)
+  Tilt head UP/DOWN → rotate around screen horizontal (device Y) → gamma
+    Head up = gamma changes → pitch
+  NO ROLL (disabled as requested)
+
+Inverted for VR: head up → scene down, head left → scene right
+*/
+function getLandscapeFlip(){
+let angle=0;
+if(screen.orientation&&typeof screen.orientation.angle==='number')angle=screen.orientation.angle;
+else if(typeof window.orientation==='number')angle=window.orientation;
+if(angle===270||angle===-90)return -1;
+return 1;
+}
+function handleGyroMotion(e){
+const rr=e.rotationRate;
+if(!rr||rr.alpha===null||rr.beta===null||rr.gamma===null)return;
+const now=performance.now();
+if(lastGyroTime===0){lastGyroTime=now;gyroReady=true;return;}
+const dtS=(now-lastGyroTime)/1000;
+lastGyroTime=now;
+if(dtS<=0||dtS>0.2)return;
+const D2R=Math.PI/180;
+const rBeta=rr.beta*D2R;
+const rGamma=rr.gamma*D2R;
+const flip=getLandscapeFlip();
+
+// YAW: head turn left/right = beta (device X rotation in landscape)
+// Inverted: head left → scene right
+tYaw += rBeta * dtS * flip;
+
+// PITCH: head tilt up/down = gamma (device Y rotation in landscape)  
+// Inverted: head up → scene down
+tPitch += rGamma * dtS * flip;
+
+// ROLL: DISABLED as requested
+// tRoll stays at 0
+
+tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+tRoll=0; // Force no roll
+gyroReady=true;
+}
+function initGyro(){
+window.addEventListener('devicemotion',handleGyroMotion,true);
+}
+function reqGyroPermission(){
+if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+DeviceMotionEvent.requestPermission().then(s=>{
+if(s==='granted')window.addEventListener('devicemotion',handleGyroMotion,true);
+}).catch(()=>{});
+}
+}
+function initVR(img){
+lockLS();
+document.getElementById('vr-wrap').style.display='block';
+canvas=document.getElementById('glc');
+resizeCanvas();
+gl=canvas.getContext('webgl',{antialias:false,alpha:false,depth:true,stencil:false,preserveDrawingBuffer:false,powerPreference:'high-performance'})||canvas.getContext('experimental-webgl',{antialias:false,alpha:false});
+if(!gl){alert('WebGL not supported');return}
+gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+panoTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,panoTexture);
+gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);setTexParams(gl.TEXTURE_2D);
+buildShaders();buildSphere(40,40,50);
+quadVBO=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);
+gl.bufferData(gl.ARRAY_BUFFER,_quadVerts,gl.STATIC_DRAW);
+progPano._aP=gl.getAttribLocation(progPano,'aP');
+progPano._aT=gl.getAttribLocation(progPano,'aT');
+progPano._uProj=gl.getUniformLocation(progPano,'uProj');
+progPano._uView=gl.getUniformLocation(progPano,'uView');
+progPano._uTex=gl.getUniformLocation(progPano,'uTex');
+handCanvas=document.createElement('canvas');handCanvas.width=512;handCanvas.height=512;
+handCtx=handCanvas.getContext('2d',{willReadFrequently:false});
+_cardCanvas=document.createElement('canvas');_cardCanvas.width=512;_cardCanvas.height=200;
+_cardCtx=_cardCanvas.getContext('2d');
+_camCanvas=document.createElement('canvas');_camCanvas.width=512;_camCanvas.height=384;
+_camCtx=_camCanvas.getContext('2d');
+initGyro();initTouch();
+canvas.addEventListener('click',firstTap,{once:false});
+prevTime=performance.now();requestAnimationFrame(mainLoop);
+try{document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}
+}
+let firstTapped=false;
+function firstTap(){
+if(!firstTapped){firstTapped=true;
+if(!document.fullscreenElement)document.documentElement.requestFullscreen().catch(()=>{});
+lockLS();reqGyroPermission();
+}
+}
+const VS=`attribute vec3 aP;attribute vec2 aT;uniform mat4 uProj,uView;varying vec2 vT;void main(){gl_Position=uProj*uView*vec4(aP,1.0);vT=aT;}`;
+const FS=`precision mediump float;varying vec2 vT;uniform sampler2D uTex;void main(){gl_FragColor=texture2D(uTex,vT);}`;
+function buildShaders(){progPano=mkProg(VS,FS)}
+function mkProg(v,f){const p=gl.createProgram();gl.attachShader(p,mkSh(gl.VERTEX_SHADER,v));gl.attachShader(p,mkSh(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);return p}
+function mkSh(t,s){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);return sh}
+function buildSphere(latB,lonB,R){
+const v=[],idx=[];
+for(let i=0;i<=latB;i++){const th=i*Math.PI/latB,st=Math.sin(th),ct=Math.cos(th);
+for(let j=0;j<=lonB;j++){const ph=j*2*Math.PI/lonB;v.push(R*Math.cos(ph)*st,R*ct,R*Math.sin(ph)*st,1-j/lonB,i/latB)}}
+for(let i=0;i<latB;i++)for(let j=0;j<lonB;j++){const a=i*(lonB+1)+j,b=a+lonB+1;idx.push(a,b,a+1,b,b+1,a+1)}
+sphereVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);
+sphereIBO=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphereIBO);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
+sphereCount=idx.length;
+}
+function setTexParams(t){gl.texParameteri(t,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(t,gl.TEXTURE_MAG_FILTER,gl.LINEAR)}
+function I(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
+function persp(fovRad,asp,n,f){const t=1/Math.tan(fovRad/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
+function mul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s}return o}
+function rX(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[5]=c;r[6]=s;r[9]=-s;r[10]=c;return mul(m,r)}
+function rY(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[2]=-s;r[8]=s;r[10]=c;return mul(m,r)}
+function rZ(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[1]=s;r[4]=-s;r[5]=c;return mul(m,r)}
+function tr(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mul(m,t)}
+function sc(m,x,y,z){const s=I();s[0]=x;s[5]=y;s[10]=z;return mul(m,s)}
+function viewMatrix(){
+let m=I();
+// No roll - disabled
+m=rX(m,pitch);
+m=rY(m,yaw);
+return m;
+}
+function initTouch(){
+canvas.addEventListener('touchstart',e=>{
+if(e.touches.length===1){
+dragging=true;
+dragSX=e.touches[0].clientX;dragSY=e.touches[0].clientY;
+dragYaw0=tYaw;dragPitch0=tPitch;
+}
+e.preventDefault();
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+if(dragging&&!gyroReady&&e.touches.length===1){
+tYaw=dragYaw0+(e.touches[0].clientX-dragSX)*0.004;
+tPitch=dragPitch0-(e.touches[0].clientY-dragSY)*0.004;
+tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+}
+e.preventDefault();
+},{passive:false});
+canvas.addEventListener('touchend',()=>{dragging=false});
+canvas.addEventListener('mousedown',e=>{dragging=true;dragSX=e.clientX;dragSY=e.clientY;dragYaw0=tYaw;dragPitch0=tPitch});
+window.addEventListener('mousemove',e=>{
+if(dragging&&!gyroReady){
+tYaw=dragYaw0+(e.clientX-dragSX)*0.004;
+tPitch=dragPitch0-(e.clientY-dragSY)*0.004;
+tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+}
+});
+window.addEventListener('mouseup',()=>{dragging=false});
+}
+function mkTex(src){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);setTexParams(gl.TEXTURE_2D);return t}
+function updateTex(tex,src){gl.bindTexture(gl.TEXTURE_2D,tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src)}
+function rRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+function updateCardTexture(){
+const d=new Date();
+const ts=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const ds=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+const x=_cardCtx;
+x.clearRect(0,0,512,200);
+x.fillStyle='rgba(255,255,255,0.06)';rRect(x,0,0,512,200,24);x.fill();
+x.strokeStyle='rgba(255,255,255,0.14)';x.lineWidth=1.5;rRect(x,0,0,512,200,24);x.stroke();
+x.fillStyle='#fff';x.textAlign='center';x.font="bold 56px 'Inter',sans-serif";x.fillText(ts,256,88);
+x.fillStyle='rgba(255,255,255,0.65)';x.font="18px 'Inter',sans-serif";x.fillText(ds,256,140);
+const htStatus=handTrackingReady?(leftHandLandmarks||rightHandLandmarks?'🤚 Hands Detected':'✋ Hands Ready'):'⏳ No Hands';
+x.fillStyle='rgba(255,255,255,0.35)';x.font="12px 'Inter',sans-serif";x.fillText(htStatus,256,175);
+if(texCard){updateTex(texCard,_cardCanvas)}else{texCard=mkTex(_cardCanvas)}
+}
+function buildAppCardTextures(){
+texAppBGs.forEach(t=>{if(t)gl.deleteTexture(t)});texAppBGs=[];
+APP_ICONS.forEach((app,i)=>{
+const c=document.createElement('canvas');c.width=160;c.height=160;const x=c.getContext('2d');
+const hs=hoverStates[app.id];
+const hp=hs?hs.prog:0;
+x.fillStyle=`rgba(255,255,255,${0.07+hp*0.08})`;rRect(x,4,4,152,152,22);x.fill();
+x.strokeStyle=`rgba(${hp>0?'0,200,255':'255,255,255'},${0.16+hp*0.4})`;
+x.lineWidth=1.2+hp*1.5;rRect(x,4,4,152,152,22);x.stroke();
+if(hp>0){x.shadowColor='rgba(0,200,255,0.3)';x.shadowBlur=10*hp;x.strokeStyle=`rgba(0,200,255,${hp*0.3})`;x.lineWidth=2;rRect(x,2,2,156,156,24);x.stroke();x.shadowBlur=0}
+const img=appIconImages[i];
+if(img){x.save();rRect(x,30,20,100,100,16);x.clip();x.drawImage(img,30,20,100,100);x.restore()}
+else{x.font='50px sans-serif';x.textAlign='center';x.fillText('📱',80,82)}
+x.fillStyle='rgba(255,255,255,0.85)';x.font="600 12px 'Inter',sans-serif";x.textAlign='center';x.fillText(app.name,80,145);
+texAppBGs.push(mkTex(c));
+});
+}
+function buildPrefsButton(){
+const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');
+const hs=hoverStates['prefs'];const hp=hs?hs.prog:0;
+x.fillStyle=`rgba(255,255,255,${0.05+hp*0.08})`;rRect(x,2,2,252,60,16);x.fill();
+x.strokeStyle=`rgba(${hp>0?'0,200,255':'255,255,255'},${0.12+hp*0.4})`;
+x.lineWidth=1+hp*1.2;rRect(x,2,2,252,60,16);x.stroke();
+x.fillStyle=`rgba(255,255,255,${0.7+hp*0.3})`;x.font="600 16px 'Inter',sans-serif";x.textAlign='center';
+x.fillText('⚙ Preferences',128,38);
+if(texPrefsBtn)gl.deleteTexture(texPrefsBtn);
+texPrefsBtn=mkTex(c);
+}
+function buildSettingsPanel(){
+const c=document.createElement('canvas');c.width=600;c.height=500;const x=c.getContext('2d');
+x.fillStyle='rgba(8,8,35,0.95)';rRect(x,0,0,600,500,24);x.fill();
+x.strokeStyle='rgba(100,180,255,0.2)';x.lineWidth=1.5;rRect(x,0,0,600,500,24);x.stroke();
+x.fillStyle='rgba(255,255,255,0.04)';x.fillRect(0,0,600,52);
+x.fillStyle='#fff';x.font="700 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('VR Settings',300,35);
+const closeHs=hoverStates['settings_close'];const closeHp=closeHs?closeHs.prog:0;
+x.fillStyle=`rgba(255,60,60,${0.3+closeHp*0.5})`;x.beginPath();x.arc(560,26,16,0,Math.PI*2);x.fill();
+x.strokeStyle='#fff';x.lineWidth=2.5;x.lineCap='round';
+x.beginPath();x.moveTo(552,18);x.lineTo(568,34);x.stroke();
+x.beginPath();x.moveTo(568,18);x.lineTo(552,34);x.stroke();
+const settings=[
+{label:'Lens Field of View',key:'fov',val:vrSettings.fov,unit:'°',min:50,max:120},
+{label:'Inter Lens Distance',key:'ipd',val:vrSettings.ipd,unit:'mm',min:50,max:80},
+{label:'Screen to Lens Distance',key:'dist',val:vrSettings.screenDist,unit:'mm',min:20,max:80},
+{label:'Oversampling',key:'os',val:vrSettings.oversample,unit:'x',min:0.5,max:2.0},
+];
+settings.forEach((s,i)=>{
+const y0=80+i*100;
+x.fillStyle='rgba(255,255,255,0.75)';x.font="500 16px 'Inter',sans-serif";x.textAlign='left';x.fillText(s.label,40,y0+20);
+x.fillStyle='rgba(0,200,255,0.9)';x.font="700 18px 'Inter',sans-serif";x.textAlign='right';
+x.fillText((s.key==='os'?s.val.toFixed(1):Math.round(s.val).toString())+s.unit,560,y0+20);
+const decHp=(hoverStates[s.key+'_dec']||{}).prog||0;
+x.fillStyle=`rgba(255,255,255,${0.08+decHp*0.15})`;rRect(x,40,y0+35,50,35,10);x.fill();
+x.strokeStyle=`rgba(${decHp>0?'0,200,255':'255,255,255'},${0.2+decHp*0.5})`;x.lineWidth=1;rRect(x,40,y0+35,50,35,10);x.stroke();
+x.fillStyle=`rgba(255,255,255,${0.7+decHp*0.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('<',65,y0+58);
+const sliderX=110,sliderW=370,sliderY=y0+52;
+x.fillStyle='rgba(255,255,255,0.1)';rRect(x,sliderX,sliderY-3,sliderW,6,3);x.fill();
+const pct=(s.val-s.min)/(s.max-s.min);
+x.fillStyle='rgba(0,160,255,0.5)';rRect(x,sliderX,sliderY-3,sliderW*pct,6,3);x.fill();
+const thumbX=sliderX+sliderW*pct;
+x.fillStyle='rgba(0,200,255,0.9)';x.beginPath();x.arc(thumbX,sliderY,10,0,Math.PI*2);x.fill();
+x.fillStyle='#fff';x.beginPath();x.arc(thumbX,sliderY,5,0,Math.PI*2);x.fill();
+const incHp=(hoverStates[s.key+'_inc']||{}).prog||0;
+x.fillStyle=`rgba(255,255,255,${0.08+incHp*0.15})`;rRect(x,500,y0+35,50,35,10);x.fill();
+x.strokeStyle=`rgba(${incHp>0?'0,200,255':'255,255,255'},${0.2+incHp*0.5})`;x.lineWidth=1;rRect(x,500,y0+35,50,35,10);x.stroke();
+x.fillStyle=`rgba(255,255,255,${0.7+incHp*0.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('>',525,y0+58);
+});
+if(texSettingsPanel)gl.deleteTexture(texSettingsPanel);
+texSettingsPanel=mkTex(c);
+}
+function buildCrosshairTexture(){
+const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
+x.strokeStyle='rgba(255,255,255,0.5)';x.lineWidth=2;x.beginPath();x.arc(64,64,18,0,Math.PI*2);x.stroke();
+x.strokeStyle='rgba(255,255,255,0.6)';x.lineWidth=1.5;
+[[64,40,64,52],[64,76,64,88],[40,64,52,64],[76,64,88,64]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
+x.fillStyle='rgba(255,255,255,0.85)';x.beginPath();x.arc(64,64,3,0,Math.PI*2);x.fill();
+if(texCrosshair)gl.deleteTexture(texCrosshair);texCrosshair=mkTex(c);
+}
+function buildGazeTexture(prog){
+const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
+x.strokeStyle='rgba(255,255,255,0.15)';x.lineWidth=5;x.beginPath();x.arc(64,64,32,0,Math.PI*2);x.stroke();
+if(prog>0){
+x.strokeStyle='rgba(0,200,255,0.95)';x.lineWidth=5;x.lineCap='round';
+x.beginPath();x.arc(64,64,32,-Math.PI/2,-Math.PI/2+Math.PI*2*prog);x.stroke();
+}
+x.fillStyle='rgba(255,255,255,0.85)';x.beginPath();x.arc(64,64,3.5,0,Math.PI*2);x.fill();
+x.strokeStyle='rgba(255,255,255,0.6)';x.lineWidth=1.5;
+[[64,26,64,42],[64,86,64,102],[26,64,42,64],[86,64,102,64]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
+if(texGazeRing)gl.deleteTexture(texGazeRing);texGazeRing=mkTex(c);
+}
+function buildCloseTexture(){
+const c=document.createElement('canvas');c.width=80;c.height=80;const x=c.getContext('2d');
+const hp=(hoverStates['close']||{}).prog||0;
+x.fillStyle=`rgba(255,40,40,${0.5+hp*0.4})`;x.beginPath();x.arc(40,40,28,0,Math.PI*2);x.fill();
+x.strokeStyle='#fff';x.lineWidth=3.5;x.lineCap='round';
+x.beginPath();x.moveTo(26,26);x.lineTo(54,54);x.stroke();
+x.beginPath();x.moveTo(54,26);x.lineTo(26,54);x.stroke();
+if(texCloseBtn)gl.deleteTexture(texCloseBtn);texCloseBtn=mkTex(c);
+}
+function updateCameraTexture(){
+if(!camReady||!camVideo||camVideo.readyState<2)return;
+const x=_camCtx;
+x.clearRect(0,0,512,384);
+x.fillStyle='rgba(6,6,28,0.95)';rRect(x,0,0,512,384,20);x.fill();
+x.strokeStyle='rgba(255,255,255,0.15)';x.lineWidth=1.5;rRect(x,0,0,512,384,20);x.stroke();
+x.fillStyle='#fff';x.font="600 14px 'Inter',sans-serif";x.textAlign='center';x.fillText('📷 Camera',256,24);
+x.save();rRect(x,16,44,480,324,10);x.clip();
+try{x.drawImage(camVideo,16,44,480,324)}catch(e){}
+x.restore();
+if(texCamView){updateTex(texCamView,_camCanvas)}else{texCamView=mkTex(_camCanvas)}
+}
+const HAND_CONNECTIONS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const FINGER_COLORS=['#ff4466','#ffaa00','#44ff66','#4488ff','#cc44ff'];
+
+let spotlightTex=null;
+function buildSpotlightTexture(){
+const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
+// Draw spotlight cone visualization
+const cx2=128,cy2=128;
+const r=spotlightRadius*256*4; // scale for visibility
+// Outer glow
+const grd=x.createRadialGradient(cx2,cy2,0,cx2,cy2,r*1.5);
+grd.addColorStop(0,'rgba(0,180,255,0.15)');
+grd.addColorStop(0.6,'rgba(0,180,255,0.05)');
+grd.addColorStop(1,'rgba(0,0,0,0)');
+x.fillStyle=grd;x.fillRect(0,0,256,256);
+// Ring
+x.strokeStyle=spotlightActive?'rgba(0,200,255,0.6)':'rgba(255,255,255,0.3)';
+x.lineWidth=spotlightActive?3:2;
+x.beginPath();x.arc(cx2,cy2,Math.max(r*0.8,15),0,Math.PI*2);x.stroke();
+// Inner dot
+x.fillStyle=spotlightActive?'rgba(0,255,200,0.8)':'rgba(255,255,255,0.5)';
+x.beginPath();x.arc(cx2,cy2,4,0,Math.PI*2);x.fill();
+// Crosshair lines
+x.strokeStyle=`rgba(255,255,255,${spotlightActive?0.4:0.3})`;
+x.lineWidth=1;
+const lr=Math.max(r*0.8,15);
+[[cx2,cy2-lr-5,cx2,cy2-lr+8],[cx2,cy2+lr-8,cx2,cy2+lr+5],[cx2-lr-5,cy2,cx2-lr+8,cy2],[cx2+lr-8,cy2,cx2+lr+5,cy2]].forEach(([x1,y1,x2,y2])=>{
+x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke();
+});
+if(spotlightTex)gl.deleteTexture(spotlightTex);
+spotlightTex=mkTex(c);
+}
+
+function buildCombinedHandTexture(){
+if(!leftHandLandmarks&&!rightHandLandmarks){
+if(handTexCombined){gl.deleteTexture(handTexCombined);handTexCombined=null}
+return;
+}
+const x=handCtx;
+x.clearRect(0,0,512,512);
+function drawHand(landmarks){
+if(!landmarks)return;
+x.globalAlpha=1;
+HAND_CONNECTIONS.forEach(([a,b])=>{
+const la=landmarks[a],lb=landmarks[b];
+const fi=Math.floor(Math.max(a,b)/4);
+x.strokeStyle=FINGER_COLORS[Math.min(fi,4)];
+x.lineWidth=8;x.lineCap='round';x.globalAlpha=0.4;
+x.beginPath();x.moveTo(la.x*512,la.y*512);x.lineTo(lb.x*512,lb.y*512);x.stroke();
+x.lineWidth=5;x.globalAlpha=0.95;
+x.beginPath();x.moveTo(la.x*512,la.y*512);x.lineTo(lb.x*512,lb.y*512);x.stroke();
+});
+x.globalAlpha=1;
+landmarks.forEach((lm,i)=>{
+const fi=Math.floor(i/4);
+x.fillStyle=FINGER_COLORS[Math.min(fi,4)];
+x.beginPath();x.arc(lm.x*512,lm.y*512,8,0,Math.PI*2);x.fill();
+x.strokeStyle='rgba(255,255,255,0.8)';x.lineWidth=2.5;
+x.beginPath();x.arc(lm.x*512,lm.y*512,8,0,Math.PI*2);x.stroke();
+});
+const thumb=landmarks[4],idx=landmarks[8];
+const mx=(thumb.x+idx.x)/2*512,my=(thumb.y+idx.y)/2*512;
+const dist=Math.sqrt((thumb.x-idx.x)**2+(thumb.y-idx.y)**2);
+const pinching=dist<0.07;
+x.fillStyle=pinching?'rgba(0,255,150,0.8)':'rgba(255,255,255,0.3)';
+x.beginPath();x.arc(mx,my,pinching?22:14,0,Math.PI*2);x.fill();
+if(pinching){
+x.strokeStyle='rgba(0,255,150,0.6)';x.lineWidth=3;
+x.beginPath();x.arc(mx,my,30,0,Math.PI*2);x.stroke();
+}
+[landmarks[4],landmarks[8]].forEach((tip,ti)=>{
+x.fillStyle=ti===0?'rgba(255,100,100,0.8)':'rgba(100,200,255,0.8)';
+x.beginPath();x.arc(tip.x*512,tip.y*512,11,0,Math.PI*2);x.fill();
+x.strokeStyle='#fff';x.lineWidth=3;
+x.beginPath();x.arc(tip.x*512,tip.y*512,11,0,Math.PI*2);x.stroke();
+});
+}
+drawHand(leftHandLandmarks);
+drawHand(rightHandLandmarks);
+if(handTexCombined){updateTex(handTexCombined,handCanvas)}else{handTexCombined=mkTex(handCanvas)}
+}
+function getAppPositions(){
+const startX=-3.75,spacing=1.5;
+return APP_ICONS.map((a,i)=>({...a,pos:[startX+i*spacing,-1.0,-5],w:1.0,h:1.0,idx:i}));
+}
+function getPrefsPos(){return{pos:[0,-2.6,-5],w:2.0,h:0.5}}
+function getSettingsPos(){return{pos:[0,-0.5,-5],w:5.0,h:4.2}}
+function getSettingsClosePos(){return{pos:[2.15,1.5,-5],w:0.45,h:0.45}}
+function getClosePos(){return{pos:[0,3.0,-5],w:0.65,h:0.65}}
+function getSettingsButtonPositions(){
+const pW=5.0,pH=4.2,pX=0,pY=-0.5,pZ=-5;
+const cW=600,cH=500;
+const keys=['fov','ipd','dist','os'];
+const results=[];
+keys.forEach((k,i)=>{
+const cy0=80+i*100;
+const decCX=65,decCY=cy0+52;
+results.push({id:k+'_dec',pos:[pX+(decCX/cW-0.5)*pW,pY+(0.5-decCY/cH)*pH,pZ],w:0.42,h:0.3});
+const incCX=525,incCY=cy0+52;
+results.push({id:k+'_inc',pos:[pX+(incCX/cW-0.5)*pW,pY+(0.5-incCY/cH)*pH,pZ],w:0.42,h:0.3});
+});
+const scPos=getSettingsClosePos();
+results.push({id:'settings_close',pos:scPos.pos,w:scPos.w,h:scPos.h});
+return results;
+}
+function gazeDir(){
+return[-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)];
+}
+function hitQuad(dir,pos,w,h){
+if(Math.abs(dir[2])<0.001)return false;
+const t=pos[2]/(-dir[2]);if(t<0)return false;
+const hx=dir[0]*t,hy=dir[1]*t;
+return hx>=pos[0]-w/2&&hx<=pos[0]+w/2&&hy>=pos[1]-h/2&&hy<=pos[1]+h/2;
+}
+
+// Cast a ray from the spotlight position through the 3D scene
+// spotlightX, spotlightY are in NDC (-1 to 1)
+function spotlightRayDir(sx,sy){
+const fovRad=vrSettings.fov*Math.PI/180;
+const asp=(canvas.width/2)/canvas.height;
+const halfFovTan=Math.tan(fovRad/2);
+const rx=sx*halfFovTan*asp;
+const ry=sy*halfFovTan;
+const rz=-1;
+const len=Math.sqrt(rx*rx+ry*ry+rz*rz);
+// Transform ray by inverse view (yaw then pitch)
+const cy2=Math.cos(yaw),sy2=Math.sin(yaw);
+const cp2=Math.cos(pitch),sp2=Math.sin(pitch);
+const lx=rx/len,ly=ry/len,lz=rz/len;
+// Undo pitch (rotate around X by -pitch)
+const ly2=ly*cp2-lz*sp2;
+const lz2=ly*sp2+lz*cp2;
+// Undo yaw (rotate around Y by -yaw)
+const dx=lx*cy2+lz2*sy2;
+const dy=ly2;
+const dz=-lx*sy2+lz2*cy2;
+return[dx,dy,dz];
+}
+
+function spotlightHitQuad(pos,w,h){
+const dir=spotlightRayDir(spotlightX,spotlightY);
+return hitQuad(dir,pos,w,h);
+}
+
+function adjustSetting(key,delta){
+const defs={fov:{min:50,max:120,step:2},ipd:{min:50,max:80,step:1},dist:{min:20,max:80,step:1},os:{min:0.5,max:2.0,step:0.1}};
+const d=defs[key];if(!d)return;
+const map={fov:'fov',ipd:'ipd',dist:'screenDist',os:'oversample'};
+vrSettings[map[key]]=Math.round(Math.max(d.min,Math.min(d.max,vrSettings[map[key]]+delta*d.step))*100)/100;
+if(key==='os')resizeCanvas();
+needSettingsRebuild=true;
+}
+function triggerApp(id){
+if(id==='camera')openEmbeddedFrame('camera.html');
+else if(id==='reader')openEmbeddedFrame('reader.html');
+else if(id==='gallery')openEmbeddedFrame('gallery.html');
+else if(id==='settings'){settingsOpen=!settingsOpen;cameraAppOpen=false}
+else if(id==='vr'){/* VR app - do nothing special */}
+else if(id==='ai'){/* AI app placeholder */}
+}
+function triggerAction(id){
+if(id==='prefs'){settingsOpen=!settingsOpen;cameraAppOpen=false;needSettingsRebuild=true}
+else if(id==='close'){cameraAppOpen=false}
+else if(id==='settings_close'){settingsOpen=false}
+else if(id.endsWith('_dec')){adjustSetting(id.replace('_dec',''),-1)}
+else if(id.endsWith('_inc')){adjustSetting(id.replace('_inc',''),1)}
+}
+
+function getInteractables(){
+let interactables=[];
+if(cameraAppOpen){
+interactables.push({id:'close',...getClosePos()});
+}else if(settingsOpen){
+interactables.push(...getSettingsButtonPositions());
+}else{
+getAppPositions().forEach(a=>interactables.push({id:a.id,pos:a.pos,w:a.w,h:a.h}));
+const pp=getPrefsPos();
+interactables.push({id:'prefs',pos:pp.pos,w:pp.w,h:pp.h});
+}
+return interactables;
+}
+
+function doTrigger(id){
+if(['close','prefs','settings_close'].includes(id)||id.endsWith('_dec')||id.endsWith('_inc')){
+triggerAction(id);
+}else{
+triggerApp(id);
+}
+}
+
+function checkGaze(dt){
+const dir=gazeDir();
+let hit=null;
+const interactables=getInteractables();
+
+for(const item of interactables){
+if(hitQuad(dir,item.pos,item.w,item.h)){hit=item.id;break}
+}
+
+// Pinch click: cast ray from spotlight position through scene depth
+if(pinchClickLeft||pinchClickRight){
+for(const item of interactables){
+if(spotlightHitQuad(item.pos,item.w,item.h)){
+doTrigger(item.id);
+gazeTimer=0;gazeProg=0;gazeHit=null;
+return;
+}
+}
+}
+
+let anyChanged=false;
+for(const key in hoverStates){
+const hs=hoverStates[key];
+const isHit=hit===key;
+if(isHit!==hs.hover){hs.hover=isHit;anyChanged=true}
+if(hs.hover){const o=hs.prog;hs.prog=Math.min(hs.prog+dt*0.5,1);if(hs.prog-o>0.01)anyChanged=true}
+else{const o=hs.prog;hs.prog=Math.max(hs.prog-dt*2,0);if(o-hs.prog>0.01)anyChanged=true}
+}
+if(anyChanged){needAppRebuild=true;needPrefsRebuild=true;needSettingsRebuild=true;if(cameraAppOpen)buildCloseTexture()}
+if(hit){
+if(gazeHit===hit){
+gazeTimer+=dt;gazeProg=Math.min(gazeTimer/GAZE_DUR,1.0);
+if(gazeTimer>=GAZE_DUR){
+doTrigger(hit);
+gazeTimer=0;gazeProg=0;gazeHit=null;
+}
+}else{gazeHit=hit;gazeTimer=0;gazeProg=0}
+}else{gazeHit=null;gazeTimer=0;gazeProg=0}
+}
+function drawTexQuad(proj,view,pos,w,h,tex){
+if(!tex)return;
+gl.useProgram(progPano);
+let mdl=I();mdl=tr(mdl,pos[0],pos[1],pos[2]);mdl=sc(mdl,w,h,1);const mv=mul(view,mdl);
+gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);
+gl.enableVertexAttribArray(progPano._aP);gl.vertexAttribPointer(progPano._aP,3,gl.FLOAT,false,20,0);
+gl.enableVertexAttribArray(progPano._aT);gl.vertexAttribPointer(progPano._aT,2,gl.FLOAT,false,20,12);
+gl.uniformMatrix4fv(progPano._uProj,false,proj);
+gl.uniformMatrix4fv(progPano._uView,false,mv);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(progPano._uTex,0);
+gl.drawArrays(gl.TRIANGLES,0,6);
+}
+function renderEye(proj,view){
+gl.useProgram(progPano);gl.disable(gl.DEPTH_TEST);
+gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);
+gl.enableVertexAttribArray(progPano._aP);gl.vertexAttribPointer(progPano._aP,3,gl.FLOAT,false,20,0);
+gl.enableVertexAttribArray(progPano._aT);gl.vertexAttribPointer(progPano._aT,2,gl.FLOAT,false,20,12);
+gl.uniformMatrix4fv(progPano._uProj,false,proj);
+gl.uniformMatrix4fv(progPano._uView,false,view);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,panoTexture);gl.uniform1i(progPano._uTex,0);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphereIBO);
+gl.drawElements(gl.TRIANGLES,sphereCount,gl.UNSIGNED_SHORT,0);
+gl.enable(gl.DEPTH_TEST);
+drawTexQuad(proj,view,[0,2.2,-5],4,1.8,texCard);
+if(cameraAppOpen){
+if(texCamView)drawTexQuad(proj,view,[0,0.5,-5],5,3.75,texCamView);
+const cp=getClosePos();drawTexQuad(proj,view,cp.pos,cp.w-0.15,cp.h-0.15,texCloseBtn);
+}else if(settingsOpen){
+const sp=getSettingsPos();if(texSettingsPanel)drawTexQuad(proj,view,sp.pos,sp.w,sp.h,texSettingsPanel);
+}else{
+const apps=getAppPositions();
+apps.forEach((a,i)=>{if(texAppBGs[i])drawTexQuad(proj,view,a.pos,a.w,a.h,texAppBGs[i])});
+const pp=getPrefsPos();if(texPrefsBtn)drawTexQuad(proj,view,pp.pos,pp.w,pp.h,texPrefsBtn);
+}
+// HUD overlay (hand tracking + spotlight + crosshair) rendered in screen space
+gl.disable(gl.DEPTH_TEST);
+const fovRad=vrSettings.fov*Math.PI/180;
+const asp2=(canvas.width/2)/canvas.height;
+const cP=persp(fovRad,asp2,0.01,100);
+const cV=I();
+// Hand skeleton overlay
+if(handTexCombined)drawTexQuad(cP,cV,[0,-0.15,-1.5],1.2,1.2,handTexCombined);
+// Spotlight indicator at spotlight position
+if(spotlightTex){
+const spSize=spotlightRadius*3;
+const spZ=-1.5;
+const spWorldX=spotlightX*Math.tan(fovRad/2)*asp2*Math.abs(spZ);
+const spWorldY=spotlightY*Math.tan(fovRad/2)*Math.abs(spZ);
+drawTexQuad(cP,cV,[spWorldX,spWorldY,spZ],spSize,spSize,spotlightTex);
+}
+// Crosshair / gaze ring at center
+const crossTex=gazeHit?texGazeRing:texCrosshair;
+const crossSize=gazeHit?0.18:0.1;
+drawTexQuad(cP,cV,[0,0,-1.5],crossSize,crossSize,crossTex);
+gl.enable(gl.DEPTH_TEST);
+}
+function renderFrame(){
+const fovRad=vrSettings.fov*Math.PI/180;
+const ipdM=vrSettings.ipd/1000;
+const hw=Math.floor(canvas.width/2);const asp=hw/canvas.height;
+gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+const v=viewMatrix();
+const projL=persp(fovRad,asp,0.1,100);
+gl.viewport(0,0,hw,canvas.height);renderEye(projL,mul(v,tr(I(),ipdM*0.5,0,0)));
+gl.viewport(hw,0,hw,canvas.height);renderEye(projL,mul(v,tr(I(),-ipdM*0.5,0,0)));
+}
+let frameCount=0;
+function mainLoop(now){
+requestAnimationFrame(mainLoop);
+const dt=Math.min((now-prevTime)/1000,0.1);prevTime=now;
+frameCount++;
+if(!texReady){
+updateCardTexture();buildAppCardTextures();buildCrosshairTexture();
+buildGazeTexture(0);buildCloseTexture();buildPrefsButton();buildSettingsPanel();
+buildSpotlightTexture();
+texReady=true;
+}
+if(now-lastTexTime>500){
+updateCardTexture();
+if(cameraAppOpen)updateCameraTexture();
+lastTexTime=now;
+}
+pitch+=(tPitch-pitch)*CAM_SMOOTH;
+yaw+=(tYaw-yaw)*CAM_SMOOTH;
+roll=0; // No roll
+
+updateHandState();
+if(frameCount%2===0){
+buildCombinedHandTexture();
+buildSpotlightTexture();
+}
+checkGaze(dt);
+if(gazeHit&&frameCount%3===0)buildGazeTexture(gazeProg);
+if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
+if(needPrefsRebuild){buildPrefsButton();needPrefsRebuild=false}
+if(needSettingsRebuild){buildSettingsPanel();needSettingsRebuild=false}
+const os=vrSettings.oversample;
+const cw=Math.floor(canvas.clientWidth*devicePixelRatio*os);
+const ch=Math.floor(canvas.clientHeight*devicePixelRatio*os);
+if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
+renderFrame();
+}
+window.addEventListener('load',()=>{lockLS();checkOrient()});
+</script>
+</body>
+</html>
