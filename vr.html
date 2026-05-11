@@ -3,12 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>WebXR VR Experience</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>VR Experience</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
-
 #start-screen{position:fixed;inset:0;z-index:9999;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s}
 .goggles{position:relative;width:96px;height:48px;margin-bottom:26px}
 .lens{position:absolute;width:38px;height:38px;border:2.5px solid rgba(255,255,255,.2);border-radius:50%;top:5px}
@@ -17,52 +19,64 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'In
 .lens::after{content:'';position:absolute;inset:7px;border:2px solid rgba(255,255,255,.8);border-radius:50%;border-right-color:transparent;animation:sp .9s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .goggles::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:12px;height:8px;background:rgba(255,255,255,.15);border-radius:2px}
-
-#enter-vr-btn{
-  padding:18px 48px;font-size:20px;font-weight:600;border:2px solid rgba(0,180,255,0.6);
-  background:linear-gradient(135deg,rgba(0,100,255,0.3),rgba(100,50,255,0.3));
-  color:#fff;border-radius:16px;cursor:pointer;letter-spacing:1px;
-  transition:all .3s;margin-top:20px;
-}
-#enter-vr-btn:hover{background:linear-gradient(135deg,rgba(0,100,255,0.5),rgba(100,50,255,0.5));transform:scale(1.05)}
-#enter-vr-btn:disabled{opacity:0.3;cursor:not-allowed;transform:none}
-#enter-inline-btn{
-  padding:12px 36px;font-size:16px;font-weight:500;border:1px solid rgba(255,255,255,0.3);
-  background:rgba(255,255,255,0.08);color:#fff;border-radius:12px;cursor:pointer;
-  letter-spacing:0.5px;transition:all .3s;margin-top:12px;
-}
-#enter-inline-btn:hover{background:rgba(255,255,255,0.15)}
-.status-text{font-size:14px;opacity:0.5;margin-top:16px;text-align:center;max-width:80%}
+.btn-row{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:20px}
+.vr-btn{padding:16px 44px;font-size:18px;font-weight:600;border:2px solid rgba(0,180,255,0.6);background:linear-gradient(135deg,rgba(0,100,255,0.3),rgba(100,50,255,0.3));color:#fff;border-radius:16px;cursor:pointer;letter-spacing:1px;transition:all .3s;min-width:260px;text-align:center}
+.vr-btn:hover{background:linear-gradient(135deg,rgba(0,100,255,0.5),rgba(100,50,255,0.5));transform:scale(1.05)}
+.vr-btn:disabled{opacity:0.3;cursor:not-allowed;transform:none}
+.vr-btn.secondary{border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.08);font-size:15px;font-weight:500;padding:12px 36px}
+.vr-btn.secondary:hover{background:rgba(255,255,255,0.15)}
+.status-text{font-size:13px;opacity:0.5;margin-top:16px;text-align:center;max-width:85%;line-height:1.5}
 .ld-label{font-size:18px;letter-spacing:3px;font-weight:300;opacity:.7;margin-bottom:14px}
 .bar-bg{width:200px;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-bottom:10px}
 .bar-fg{height:100%;width:0;background:linear-gradient(90deg,#00b4ff,#6a30ff);border-radius:2px;transition:width .2s}
-
-#canvas-container{position:fixed;inset:0;z-index:100;display:none}
+.device-badge{display:inline-block;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:600;margin-bottom:16px;letter-spacing:0.5px}
+.device-badge.apple{background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7)}
+.device-badge.webxr{background:rgba(0,180,255,0.15);color:rgba(0,180,255,0.9)}
+#canvas-container{position:fixed;inset:0;z-index:100;display:none;background:#000}
 canvas{width:100%;height:100%;display:block}
-
 #embedded-frame-container{position:fixed;top:3%;left:3%;width:94%;height:94%;z-index:10000;display:none;border:2px solid rgba(100,180,255,0.5);border-radius:16px;overflow:hidden;background:rgba(0,0,0,0.95);box-shadow:0 0 60px rgba(0,100,255,0.4)}
 #embedded-frame-container iframe{width:100%;height:100%;border:none}
 #embedded-close-btn{position:absolute;top:10px;right:10px;width:40px;height:40px;background:rgba(255,40,40,0.8);border:2px solid rgba(255,255,255,0.3);border-radius:50%;color:#fff;font-size:22px;cursor:pointer;z-index:10001;display:flex;align-items:center;justify-content:center;font-weight:bold;line-height:1}
+#rotate-prompt{position:fixed;inset:0;z-index:99999;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:none;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
+.phone-icon{width:50px;height:86px;border:2.5px solid rgba(255,255,255,.6);border-radius:12px;position:relative;animation:rotAnim 2.5s ease-in-out infinite;margin-bottom:18px}
+.phone-icon::before{content:'';position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:12px;height:12px;border:1.5px solid rgba(255,255,255,.35);border-radius:50%}
+@keyframes rotAnim{0%,20%{transform:rotate(0)}40%,65%{transform:rotate(90deg)}85%,100%{transform:rotate(0)}}
+#rotate-prompt p{font-size:16px;opacity:.75;letter-spacing:.3px}
+#wl-overlay{position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,0.85);display:none;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+#wl-overlay .wl-text{font-size:20px;font-weight:600;opacity:0.9;margin-bottom:8px}
+#wl-overlay .wl-sub{font-size:13px;opacity:0.4}
 </style>
 </head>
 <body>
 
-<div id="start-screen">
-  <div class="goggles"><div class="lens"></div><div class="lens"></div></div>
-  <div class="ld-label">VR EXPERIENCE</div>
-  <div class="bar-bg"><div class="bar-fg" id="bar-fg"></div></div>
-  <button id="enter-vr-btn" disabled>Loading...</button>
-  <button id="enter-inline-btn" style="display:none">Start Without VR</button>
-  <div class="status-text" id="status-text">Initializing...</div>
+<div id="rotate-prompt">
+<div class="phone-icon"></div>
+<p>Rotate to landscape for VR</p>
 </div>
 
-<div id="canvas-container">
-  <canvas id="glcanvas"></canvas>
+<div id="wl-overlay">
+<div class="wl-text">Tap to Enter Fullscreen VR</div>
+<div class="wl-sub">Best experienced in landscape orientation</div>
 </div>
+
+<div id="start-screen">
+<div class="goggles"><div class="lens"></div><div class="lens"></div></div>
+<div class="ld-label">VR EXPERIENCE</div>
+<div class="bar-bg"><div class="bar-fg" id="bar-fg"></div></div>
+<div class="device-badge" id="device-badge">Detecting...</div>
+<div class="btn-row">
+<button class="vr-btn" id="enter-vr-btn" disabled>Loading...</button>
+<button class="vr-btn secondary" id="enter-cardboard-btn" style="display:none">📱 Cardboard / Phone VR</button>
+<button class="vr-btn secondary" id="enter-inline-btn" style="display:none">🖥 Flat View</button>
+</div>
+<div class="status-text" id="status-text">Initializing...</div>
+</div>
+
+<div id="canvas-container"><canvas id="glcanvas"></canvas></div>
 
 <div id="embedded-frame-container">
-  <button id="embedded-close-btn" onclick="closeEmbeddedFrame()">✕</button>
-  <iframe id="embedded-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
+<button id="embedded-close-btn" onclick="closeEmbeddedFrame()">✕</button>
+<iframe id="embedded-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
 </div>
 
 <script>
@@ -71,1140 +85,854 @@ canvas{width:100%;height:100%;display:block}
 // ============================================================
 // CONFIG
 // ============================================================
-const PANO_URL = 'https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
-const GAZE_DUR = 2.0;
-const APP_ICONS = [
-  {name:'VR',     url:'https://i.ibb.co/fdmh5byd/vr.png',      id:'vr'},
-  {name:'Camera', url:'https://i.ibb.co/1fFjzT3p/camera.png',   id:'camera'},
-  {name:'Gallery',url:'https://i.ibb.co/7Nd41XyX/gallery.png',  id:'gallery'},
-  {name:'AI',     url:'https://i.ibb.co/N62BHcnc/ai.png',       id:'ai'},
-  {name:'Reader', url:'https://i.ibb.co/KxqC6ZR5/reading.png',  id:'reader'},
-  {name:'Settings',url:'https://i.ibb.co/3Y9DYF4J/settings.png',id:'settings'},
+const PANO_URL='https://i.ibb.co/wNhchS9Z/thumbnail-56ba41de-ba99-4154-b769-d60fee323f3e-jpg-2048x2048-q85-upscayl-4x-upscayl-lite-4x-2.png';
+const GAZE_DUR=2.0;
+const FIST_DUR=2.0;
+const APP_ICONS=[
+{name:'VR',url:'https://i.ibb.co/fdmh5byd/vr.png',id:'vr'},
+{name:'Camera',url:'https://i.ibb.co/1fFjzT3p/camera.png',id:'camera'},
+{name:'Gallery',url:'https://i.ibb.co/7Nd41XyX/gallery.png',id:'gallery'},
+{name:'AI',url:'https://i.ibb.co/N62BHcnc/ai.png',id:'ai'},
+{name:'Reader',url:'https://i.ibb.co/KxqC6ZR5/reading.png',id:'reader'},
+{name:'Settings',url:'https://i.ibb.co/3Y9DYF4J/settings.png',id:'settings'},
 ];
+
+const JOINT={WRIST:0,THUMB_MC:1,THUMB_PP:2,THUMB_DP:3,THUMB_TIP:4,INDEX_MC:5,INDEX_PP:6,INDEX_MP:7,INDEX_DP:8,INDEX_TIP:9,MIDDLE_MC:10,MIDDLE_PP:11,MIDDLE_MP:12,MIDDLE_DP:13,MIDDLE_TIP:14,RING_MC:15,RING_PP:16,RING_MP:17,RING_DP:18,RING_TIP:19,PINKY_MC:20,PINKY_PP:21,PINKY_MP:22,PINKY_DP:23,PINKY_TIP:24};
+const HAND_CONNS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[8,9],[0,10],[10,11],[11,12],[12,13],[13,14],[0,15],[15,16],[16,17],[17,18],[18,19],[0,20],[20,21],[21,22],[22,23],[23,24],[5,10],[10,15],[15,20]];
+const FINGER_COLS=[[1,.27,.4],[1,.67,0],[.27,1,.4],[.27,.53,1],[.8,.27,1]];
+
+// ============================================================
+// DEVICE DETECTION
+// ============================================================
+const UA=navigator.userAgent||'';
+const isApple=/iPhone|iPad|iPod|Macintosh/i.test(UA)&&'ontouchend' in document;
+const isIOS=/iPhone|iPad|iPod/i.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isSafari=/^((?!chrome|android).)*safari/i.test(UA);
+const hasWebXR=!!navigator.xr;
+const isQuest=/OculusBrowser|Quest/i.test(UA);
 
 // ============================================================
 // GLOBALS
 // ============================================================
-let gl, canvas, renderer;
-let xrSession = null, xrRefSpace = null;
-let isImmersive = false, isInlineMode = false;
-let panoTexture = null, panoImage = null;
-let appIconImages = [], appIconsLoaded = 0;
+let gl,canvas;
+let xrSession=null,xrRefSpace=null;
+let isImmersive=false,isCardboardMode=false,isInlineMode=false;
+let panoTexture=null,panoImage=null;
+let appIconImages=[],appIconsLoaded=0;
+let progPano,progUI,progHand;
+let sphereVBO,sphereIBO,sphereCount,quadVBO,boneVBO;
+let texCard=null,texAppBGs=[],texCrosshair=null,texGazeRing=null;
+let texCloseBtn=null,texSettingsPanel=null,texPrefsBtn=null,texFistIndicator=null;
+let texReady=false;
+let gazeHit=null,gazeTimer=0,gazeProg=0;
+let prevTime=0,lastTexUpdateTime=0,frameCount=0;
+let cameraAppOpen=false,settingsOpen=false,embeddedFrameOpen=false;
+let vrSettings={fov:80,ipd:62,screenDist:40,oversample:1.0};
+let hoverStates={};
+APP_ICONS.forEach(a=>{hoverStates[a.id]={hover:false,prog:0}});
+['prefs','close','fov_dec','fov_inc','ipd_dec','ipd_inc','dist_dec','dist_inc','os_dec','os_inc','settings_close'].forEach(k=>{hoverStates[k]={hover:false,prog:0}});
+let needAppRebuild=false,needSettingsRebuild=false,needPrefsRebuild=false;
 
-// Shaders
-let progPano, progUI;
+// Cardboard/Apple gyro state
+let tPitch=0,tYaw=0,tRoll=0;
+let smoothPitch=0,smoothYaw=0,smoothRoll=0;
+let gyroReady=false,gyroAlpha=0,gyroBeta=0,gyroGamma=0;
+let initialAlpha=null;
+let useDeviceOrientation=false;
+let dragging=false,dragSX=0,dragSY=0,dragYaw0=0,dragPitch0=0;
 
-// Geometry
-let sphereVBO, sphereIBO, sphereCount;
-let quadVBO;
+// XR input
+let xrInputPrimary=false,xrInputPrimaryPrev=false;
+let pinchClickThisFrame=false,pinchRayOrigin=null,pinchRayDir=null;
 
-// Textures for UI
-let texCard = null, texAppBGs = [], texCrosshair = null, texGazeRing = null;
-let texCloseBtn = null, texSettingsPanel = null, texPrefsBtn = null;
-let texReady = false;
+// Hand tracking (WebXR)
+let handData={
+left:{joints:null,smoothJoints:new Array(25).fill(null),isFist:false,fistConf:0,pinch:false,pinchConf:0,pinchPt:null,visible:false,prevPinch:false,indexTipWorld:null,wristWorld:null},
+right:{joints:null,smoothJoints:new Array(25).fill(null),isFist:false,fistConf:0,pinch:false,pinchConf:0,pinchPt:null,visible:false,prevPinch:false,indexTipWorld:null,wristWorld:null}
+};
+let fistTimer=0,fistActive=false,fistProg=0;
 
-// Gaze / interaction
-let gazeHit = null, gazeTimer = 0, gazeProg = 0;
-let prevTime = 0;
-
-// App state
-let cameraAppOpen = false, settingsOpen = false;
-let embeddedFrameOpen = false;
-
-// Settings
-let vrSettings = {fov:80, ipd:62, screenDist:40, oversample:1.0};
-
-// Hover states
-let hoverStates = {};
-APP_ICONS.forEach(a => { hoverStates[a.id] = {hover:false, prog:0}; });
-['prefs','close','fov_dec','fov_inc','ipd_dec','ipd_inc','dist_dec','dist_inc','os_dec','os_inc','settings_close'].forEach(k => {
-  hoverStates[k] = {hover:false, prog:0};
-});
-
-let needAppRebuild = false, needSettingsRebuild = false, needPrefsRebuild = false;
-
-// Fallback (inline) camera state
-let inlinePitch = 0, inlineYaw = 0;
-let tPitch = 0, tYaw = 0;
-let dragging = false, dragSX = 0, dragSY = 0, dragYaw0 = 0, dragPitch0 = 0;
-let gyroReady = false, lastGyroTime = 0;
-
-// Temp canvases
-let _cardCanvas, _cardCtx, _camCanvas, _camCtx;
-
-// Controller / hand input
-let xrInputPrimary = false, xrInputPrimaryPrev = false;
-let xrGazeOrigin = null, xrGazeDir = null;
+// Fullscreen helpers
+let fullscreenRequested=false;
+let _cardCanvas,_cardCtx;
 
 // ============================================================
 // EMBEDDED FRAME
 // ============================================================
-function openEmbeddedFrame(url) {
-  document.getElementById('embedded-iframe').src = url;
-  document.getElementById('embedded-frame-container').style.display = 'block';
-  embeddedFrameOpen = true;
+function openEmbeddedFrame(u){document.getElementById('embedded-iframe').src=u;document.getElementById('embedded-frame-container').style.display='block';embeddedFrameOpen=true}
+function closeEmbeddedFrame(){document.getElementById('embedded-frame-container').style.display='none';document.getElementById('embedded-iframe').src='about:blank';embeddedFrameOpen=false}
+
+// ============================================================
+// FULLSCREEN
+// ============================================================
+function goFullscreen(){
+if(fullscreenRequested)return;
+const el=document.documentElement;
+const rfs=el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen||el.msRequestFullscreen;
+if(rfs){
+rfs.call(el).then(()=>{fullscreenRequested=true}).catch(()=>{});
 }
-function closeEmbeddedFrame() {
-  document.getElementById('embedded-frame-container').style.display = 'none';
-  document.getElementById('embedded-iframe').src = 'about:blank';
-  embeddedFrameOpen = false;
+// iOS Safari doesn't support Fullscreen API — we handle via meta viewport + hiding address bar
+if(isIOS){
+window.scrollTo(0,1);
+fullscreenRequested=true;
+}
+try{screen.orientation.lock('landscape-primary').catch(()=>{})}catch(e){}
+}
+
+function isFullscreen(){
+return!!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement||document.msFullscreenElement);
+}
+
+function exitFullscreen(){
+const efs=document.exitFullscreen||document.webkitExitFullscreen||document.mozCancelFullScreen||document.msExitFullscreen;
+if(efs&&isFullscreen())efs.call(document).catch(()=>{});
+try{screen.orientation.unlock()}catch(e){}
 }
 
 // ============================================================
-// MATH UTILITIES
+// MATH
 // ============================================================
-function identityMat() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
-function perspectiveMat(fovRad, asp, near, far) {
-  const t = 1/Math.tan(fovRad/2), nf = 1/(near-far);
-  return new Float32Array([t/asp,0,0,0, 0,t,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0]);
+function I(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
+function persp(f,a,n,fa){const t=1/Math.tan(f/2),nf=1/(n-fa);return new Float32Array([t/a,0,0,0,0,t,0,0,0,0,(fa+n)*nf,-1,0,0,2*fa*n*nf,0])}
+function mul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s}return o}
+function trM(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mul(m,t)}
+function scM(m,x,y,z){const s=I();s[0]=x;s[5]=y;s[10]=z;return mul(m,s)}
+function rXM(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[5]=c;r[6]=s;r[9]=-s;r[10]=c;return mul(m,r)}
+function rYM(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[2]=-s;r[8]=s;r[10]=c;return mul(m,r)}
+function rZM(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[1]=s;r[4]=-s;r[5]=c;return mul(m,r)}
+function inv4(m){
+const inv=new Float32Array(16);
+inv[0]=m[5]*m[10]*m[15]-m[5]*m[11]*m[14]-m[9]*m[6]*m[15]+m[9]*m[7]*m[14]+m[13]*m[6]*m[11]-m[13]*m[7]*m[10];
+inv[4]=-m[4]*m[10]*m[15]+m[4]*m[11]*m[14]+m[8]*m[6]*m[15]-m[8]*m[7]*m[14]-m[12]*m[6]*m[11]+m[12]*m[7]*m[10];
+inv[8]=m[4]*m[9]*m[15]-m[4]*m[11]*m[13]-m[8]*m[5]*m[15]+m[8]*m[7]*m[13]+m[12]*m[5]*m[11]-m[12]*m[7]*m[9];
+inv[12]=-m[4]*m[9]*m[14]+m[4]*m[10]*m[13]+m[8]*m[5]*m[14]-m[8]*m[6]*m[13]-m[12]*m[5]*m[10]+m[12]*m[6]*m[9];
+inv[1]=-m[1]*m[10]*m[15]+m[1]*m[11]*m[14]+m[9]*m[2]*m[15]-m[9]*m[3]*m[14]-m[13]*m[2]*m[11]+m[13]*m[3]*m[10];
+inv[5]=m[0]*m[10]*m[15]-m[0]*m[11]*m[14]-m[8]*m[2]*m[15]+m[8]*m[3]*m[14]+m[12]*m[2]*m[11]-m[12]*m[3]*m[10];
+inv[9]=-m[0]*m[9]*m[15]+m[0]*m[11]*m[13]+m[8]*m[1]*m[15]-m[8]*m[3]*m[13]-m[12]*m[1]*m[11]+m[12]*m[3]*m[9];
+inv[13]=m[0]*m[9]*m[14]-m[0]*m[10]*m[13]-m[8]*m[1]*m[14]+m[8]*m[2]*m[13]+m[12]*m[1]*m[10]-m[12]*m[2]*m[9];
+inv[2]=m[1]*m[6]*m[15]-m[1]*m[7]*m[14]-m[5]*m[2]*m[15]+m[5]*m[3]*m[14]+m[13]*m[2]*m[7]-m[13]*m[3]*m[6];
+inv[6]=-m[0]*m[6]*m[15]+m[0]*m[7]*m[14]+m[4]*m[2]*m[15]-m[4]*m[3]*m[14]-m[12]*m[2]*m[7]+m[12]*m[3]*m[6];
+inv[10]=m[0]*m[5]*m[15]-m[0]*m[7]*m[13]-m[4]*m[1]*m[15]+m[4]*m[3]*m[13]+m[12]*m[1]*m[7]-m[12]*m[3]*m[5];
+inv[14]=-m[0]*m[5]*m[14]+m[0]*m[6]*m[13]+m[4]*m[1]*m[14]-m[4]*m[2]*m[13]-m[12]*m[1]*m[6]+m[12]*m[2]*m[5];
+inv[3]=-m[1]*m[6]*m[11]+m[1]*m[7]*m[10]+m[5]*m[2]*m[11]-m[5]*m[3]*m[10]-m[9]*m[2]*m[7]+m[9]*m[3]*m[6];
+inv[7]=m[0]*m[6]*m[11]-m[0]*m[7]*m[10]-m[4]*m[2]*m[11]+m[4]*m[3]*m[10]+m[8]*m[2]*m[7]-m[8]*m[3]*m[6];
+inv[11]=-m[0]*m[5]*m[11]+m[0]*m[7]*m[9]+m[4]*m[1]*m[11]-m[4]*m[3]*m[9]-m[8]*m[1]*m[7]+m[8]*m[3]*m[5];
+inv[15]=m[0]*m[5]*m[10]-m[0]*m[6]*m[9]-m[4]*m[1]*m[10]+m[4]*m[2]*m[9]+m[8]*m[1]*m[6]-m[8]*m[2]*m[5];
+let det=m[0]*inv[0]+m[1]*inv[4]+m[2]*inv[8]+m[3]*inv[12];
+if(Math.abs(det)<1e-10)return I();det=1/det;for(let i=0;i<16;i++)inv[i]*=det;return inv;
 }
-function mulMat(a, b) {
-  const o = new Float32Array(16);
-  for(let i=0;i<4;i++) for(let j=0;j<4;j++) {
-    let s=0; for(let k=0;k<4;k++) s += a[k*4+j]*b[i*4+k]; o[i*4+j]=s;
-  }
-  return o;
-}
-function translateMat(m, x, y, z) {
-  const t = identityMat(); t[12]=x; t[13]=y; t[14]=z; return mulMat(m, t);
-}
-function scaleMat(m, x, y, z) {
-  const s = identityMat(); s[0]=x; s[5]=y; s[10]=z; return mulMat(m, s);
-}
-function rotXMat(m, a) {
-  const c=Math.cos(a), s=Math.sin(a), r=identityMat();
-  r[5]=c; r[6]=s; r[9]=-s; r[10]=c; return mulMat(m, r);
-}
-function rotYMat(m, a) {
-  const c=Math.cos(a), s=Math.sin(a), r=identityMat();
-  r[0]=c; r[2]=-s; r[8]=s; r[10]=c; return mulMat(m, r);
-}
-function invertMat4(m) {
-  const inv = new Float32Array(16);
-  inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
-  inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
-  inv[8]  =  m[4]*m[9]*m[15]  - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
-  inv[12] = -m[4]*m[9]*m[14]  + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
-  inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
-  inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
-  inv[9]  = -m[0]*m[9]*m[15]  + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
-  inv[13] =  m[0]*m[9]*m[14]  - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
-  inv[2]  =  m[1]*m[6]*m[15]  - m[1]*m[7]*m[14]  - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7]  - m[13]*m[3]*m[6];
-  inv[6]  = -m[0]*m[6]*m[15]  + m[0]*m[7]*m[14]  + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7]  + m[12]*m[3]*m[6];
-  inv[10] =  m[0]*m[5]*m[15]  - m[0]*m[7]*m[13]  - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7]  - m[12]*m[3]*m[5];
-  inv[14] = -m[0]*m[5]*m[14]  + m[0]*m[6]*m[13]  + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6]  + m[12]*m[2]*m[5];
-  inv[3]  = -m[1]*m[6]*m[11]  + m[1]*m[7]*m[10]  + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7]   + m[9]*m[3]*m[6];
-  inv[7]  =  m[0]*m[6]*m[11]  - m[0]*m[7]*m[10]  - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7]   - m[8]*m[3]*m[6];
-  inv[11] = -m[0]*m[5]*m[11]  + m[0]*m[7]*m[9]   + m[4]*m[1]*m[11] - m[4]*m[3]*m[9]  - m[8]*m[1]*m[7]   + m[8]*m[3]*m[5];
-  inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
-  let det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
-  if(Math.abs(det) < 1e-10) return identityMat();
-  det = 1.0/det;
-  for(let i=0;i<16;i++) inv[i] *= det;
-  return inv;
-}
-
-function transformDir(mat, dx, dy, dz) {
-  return [
-    mat[0]*dx + mat[4]*dy + mat[8]*dz,
-    mat[1]*dx + mat[5]*dy + mat[9]*dz,
-    mat[2]*dx + mat[6]*dy + mat[10]*dz
-  ];
-}
-function transformPoint(mat, x, y, z) {
-  return [
-    mat[0]*x + mat[4]*y + mat[8]*z + mat[12],
-    mat[1]*x + mat[5]*y + mat[9]*z + mat[13],
-    mat[2]*x + mat[6]*y + mat[10]*z + mat[14]
-  ];
-}
+function v3d(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+(a.z-b.z)**2)}
+function v3n(x,y,z){const l=Math.sqrt(x*x+y*y+z*z)||1;return[x/l,y/l,z/l]}
+function lerp(a,b,t){return a+(b-a)*t}
+function deg2rad(d){return d*Math.PI/180}
+function clamp(v,mn,mx){return Math.max(mn,Math.min(mx,v))}
 
 // ============================================================
 // WEBGL HELPERS
 // ============================================================
-function mkShader(type, src) {
-  const sh = gl.createShader(type);
-  gl.shaderSource(sh, src);
-  gl.compileShader(sh);
-  if(!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    console.error('Shader error:', gl.getShaderInfoLog(sh));
-  }
-  return sh;
-}
-function mkProgram(vs, fs) {
-  const p = gl.createProgram();
-  gl.attachShader(p, mkShader(gl.VERTEX_SHADER, vs));
-  gl.attachShader(p, mkShader(gl.FRAGMENT_SHADER, fs));
-  gl.linkProgram(p);
-  if(!gl.getShaderParameter) console.error(gl.getProgramInfoLog(p));
-  return p;
-}
-function setTexParams(target) {
-  gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-}
-function mkTex(src) {
-  const t = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-  setTexParams(gl.TEXTURE_2D);
-  return t;
-}
-function updateTex(tex, src) {
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-}
-
-// ============================================================
-// GEOMETRY
-// ============================================================
-function buildSphere(latB, lonB, R) {
-  const v = [], idx = [];
-  for(let i=0; i<=latB; i++) {
-    const th = i*Math.PI/latB, st = Math.sin(th), ct = Math.cos(th);
-    for(let j=0; j<=lonB; j++) {
-      const ph = j*2*Math.PI/lonB;
-      v.push(R*Math.cos(ph)*st, R*ct, R*Math.sin(ph)*st, 1-j/lonB, i/latB);
-    }
-  }
-  for(let i=0; i<latB; i++) for(let j=0; j<lonB; j++) {
-    const a = i*(lonB+1)+j, b = a+lonB+1;
-    idx.push(a, b, a+1, b, b+1, a+1);
-  }
-  sphereVBO = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
-  sphereIBO = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
-  sphereCount = idx.length;
-}
-
-const QUAD_VERTS = new Float32Array([
-  -.5,-.5,0, 0,1,  .5,-.5,0, 1,1,  .5,.5,0, 1,0,
-  -.5,-.5,0, 0,1,  .5,.5,0, 1,0,  -.5,.5,0, 0,0
-]);
+function mkSh(t,s){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(sh));return sh}
+function mkProg(vs,fs){const p=gl.createProgram();gl.attachShader(p,mkSh(gl.VERTEX_SHADER,vs));gl.attachShader(p,mkSh(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);return p}
+function setTP(t){gl.texParameteri(t,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texParameteri(t,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(t,gl.TEXTURE_MAG_FILTER,gl.LINEAR)}
+function mkTex(s){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,s);setTP(gl.TEXTURE_2D);return t}
+function upTex(t,s){gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,s)}
 
 // ============================================================
 // SHADERS
 // ============================================================
-const VS_PANO = `
-attribute vec3 aP;
-attribute vec2 aT;
-uniform mat4 uProj, uView;
-varying vec2 vT;
-void main() {
-  gl_Position = uProj * uView * vec4(aP, 1.0);
-  vT = aT;
-}`;
-
-const FS_PANO = `
-precision mediump float;
-varying vec2 vT;
-uniform sampler2D uTex;
-void main() {
-  gl_FragColor = texture2D(uTex, vT);
-}`;
-
-const VS_UI = `
-attribute vec3 aP;
-attribute vec2 aT;
-uniform mat4 uMVP;
-varying vec2 vT;
-void main() {
-  gl_Position = uMVP * vec4(aP, 1.0);
-  vT = aT;
-}`;
-
-const FS_UI = `
-precision mediump float;
-varying vec2 vT;
-uniform sampler2D uTex;
-uniform float uAlpha;
-void main() {
-  vec4 c = texture2D(uTex, vT);
-  gl_FragColor = vec4(c.rgb, c.a * uAlpha);
-}`;
+const VS_P=`attribute vec3 aP;attribute vec2 aT;uniform mat4 uProj,uView;varying vec2 vT;void main(){gl_Position=uProj*uView*vec4(aP,1.0);vT=aT;}`;
+const FS_P=`precision mediump float;varying vec2 vT;uniform sampler2D uTex;void main(){gl_FragColor=texture2D(uTex,vT);}`;
+const VS_U=`attribute vec3 aP;attribute vec2 aT;uniform mat4 uMVP;varying vec2 vT;void main(){gl_Position=uMVP*vec4(aP,1.0);vT=aT;}`;
+const FS_U=`precision mediump float;varying vec2 vT;uniform sampler2D uTex;uniform float uAlpha;void main(){vec4 c=texture2D(uTex,vT);gl_FragColor=vec4(c.rgb,c.a*uAlpha);}`;
+const VS_H=`attribute vec3 aP;uniform mat4 uMVP;uniform float uSize;void main(){gl_Position=uMVP*vec4(aP,1.0);gl_PointSize=uSize;}`;
+const FS_H=`precision mediump float;uniform vec4 uColor;void main(){vec2 c=gl_PointCoord-0.5;float d=dot(c,c);if(d>0.25)discard;float a=smoothstep(0.25,0.15,d);gl_FragColor=vec4(uColor.rgb,uColor.a*a);}`;
 
 // ============================================================
-// CANVAS DRAWING HELPERS
+// GEOMETRY
 // ============================================================
-function rRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
+function buildSphere(la,lo,R){
+const v=[],idx=[];
+for(let i=0;i<=la;i++){const th=i*Math.PI/la,st=Math.sin(th),ct=Math.cos(th);
+for(let j=0;j<=lo;j++){const ph=j*2*Math.PI/lo;v.push(R*Math.cos(ph)*st,R*ct,R*Math.sin(ph)*st,1-j/lo,i/la)}}
+for(let i=0;i<la;i++)for(let j=0;j<lo;j++){const a=i*(lo+1)+j,b=a+lo+1;idx.push(a,b,a+1,b,b+1,a+1)}
+sphereVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);
+sphereIBO=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphereIBO);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);
+sphereCount=idx.length;
+}
+const QV=new Float32Array([-.5,-.5,0,0,1,.5,-.5,0,1,1,.5,.5,0,1,0,-.5,-.5,0,0,1,.5,.5,0,1,0,-.5,.5,0,0,0]);
+
+// ============================================================
+// CANVAS 2D DRAWING
+// ============================================================
+function rR(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath()}
+
+function updateCardTexture(){
+const d=new Date(),ts=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const ds=d.toLocaleDateString([],{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+const x=_cardCtx;x.clearRect(0,0,512,200);
+x.fillStyle='rgba(255,255,255,0.06)';rR(x,0,0,512,200,24);x.fill();
+x.strokeStyle='rgba(255,255,255,0.14)';x.lineWidth=1.5;rR(x,0,0,512,200,24);x.stroke();
+x.fillStyle='#fff';x.textAlign='center';x.font="bold 56px 'Inter',sans-serif";x.fillText(ts,256,80);
+x.fillStyle='rgba(255,255,255,0.65)';x.font="18px 'Inter',sans-serif";x.fillText(ds,256,120);
+const lh=handData.left.visible,rh=handData.right.visible;
+const ht=lh&&rh?'✋✋ Both Hands':lh?'✋ Left':rh?'✋ Right':'';
+const mode=isImmersive?'🥽 WebXR':isCardboardMode?(isApple?'🍎 Gyro VR':'📱 Cardboard'):'🖥 Flat';
+x.fillStyle='rgba(255,255,255,0.35)';x.font="12px 'Inter',sans-serif";
+x.fillText(mode+(ht?' | '+ht:'')+(fistActive?' | ✊'+Math.round(fistProg*100)+'%':''),256,155);
+if(gyroReady){x.fillStyle='rgba(0,200,255,0.3)';x.font="10px 'Inter',sans-serif";x.fillText('Gyro Active',256,180)}
+if(texCard)upTex(texCard,_cardCanvas);else texCard=mkTex(_cardCanvas);
 }
 
-function updateCardTexture() {
-  const d = new Date();
-  const ts = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  const ds = d.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric', year:'numeric'});
-  const x = _cardCtx;
-  x.clearRect(0, 0, 512, 200);
-  x.fillStyle = 'rgba(255,255,255,0.06)'; rRect(x, 0, 0, 512, 200, 24); x.fill();
-  x.strokeStyle = 'rgba(255,255,255,0.14)'; x.lineWidth = 1.5; rRect(x, 0, 0, 512, 200, 24); x.stroke();
-  x.fillStyle = '#fff'; x.textAlign = 'center'; x.font = "bold 56px 'Inter',sans-serif"; x.fillText(ts, 256, 88);
-  x.fillStyle = 'rgba(255,255,255,0.65)'; x.font = "18px 'Inter',sans-serif"; x.fillText(ds, 256, 140);
-  const mode = isImmersive ? '🥽 WebXR Immersive' : (isInlineMode ? '📱 Inline Mode' : '');
-  x.fillStyle = 'rgba(255,255,255,0.35)'; x.font = "12px 'Inter',sans-serif"; x.fillText(mode, 256, 175);
-  if(texCard) updateTex(texCard, _cardCanvas); else texCard = mkTex(_cardCanvas);
+function buildAppCardTextures(){
+texAppBGs.forEach(t=>{if(t)gl.deleteTexture(t)});texAppBGs=[];
+APP_ICONS.forEach((app,i)=>{
+const c=document.createElement('canvas');c.width=160;c.height=160;const x=c.getContext('2d');
+const hs=hoverStates[app.id],hp=hs?hs.prog:0;
+x.fillStyle=`rgba(255,255,255,${.07+hp*.08})`;rR(x,4,4,152,152,22);x.fill();
+x.strokeStyle=`rgba(${hp>0?'0,200,255':'255,255,255'},${.16+hp*.4})`;x.lineWidth=1.2+hp*1.5;rR(x,4,4,152,152,22);x.stroke();
+if(hp>0){x.shadowColor='rgba(0,200,255,0.3)';x.shadowBlur=10*hp;x.strokeStyle=`rgba(0,200,255,${hp*.3})`;x.lineWidth=2;rR(x,2,2,156,156,24);x.stroke();x.shadowBlur=0}
+const img=appIconImages[i];
+if(img){x.save();rR(x,30,20,100,100,16);x.clip();x.drawImage(img,30,20,100,100);x.restore()}
+else{x.font='50px sans-serif';x.textAlign='center';x.fillText('📱',80,82)}
+x.fillStyle='rgba(255,255,255,0.85)';x.font="600 12px 'Inter',sans-serif";x.textAlign='center';x.fillText(app.name,80,145);
+texAppBGs.push(mkTex(c));
+})}
+
+function buildPrefsButton(){
+const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');
+const hp=(hoverStates['prefs']||{}).prog||0;
+x.fillStyle=`rgba(255,255,255,${.05+hp*.08})`;rR(x,2,2,252,60,16);x.fill();
+x.strokeStyle=`rgba(${hp>0?'0,200,255':'255,255,255'},${.12+hp*.4})`;x.lineWidth=1+hp*1.2;rR(x,2,2,252,60,16);x.stroke();
+x.fillStyle=`rgba(255,255,255,${.7+hp*.3})`;x.font="600 16px 'Inter',sans-serif";x.textAlign='center';x.fillText('⚙ Preferences',128,38);
+if(texPrefsBtn)gl.deleteTexture(texPrefsBtn);texPrefsBtn=mkTex(c);
 }
 
-function buildAppCardTextures() {
-  texAppBGs.forEach(t => { if(t) gl.deleteTexture(t); });
-  texAppBGs = [];
-  APP_ICONS.forEach((app, i) => {
-    const c = document.createElement('canvas'); c.width = 160; c.height = 160;
-    const x = c.getContext('2d');
-    const hs = hoverStates[app.id]; const hp = hs ? hs.prog : 0;
-    x.fillStyle = `rgba(255,255,255,${0.07+hp*0.08})`; rRect(x, 4, 4, 152, 152, 22); x.fill();
-    x.strokeStyle = `rgba(${hp>0?'0,200,255':'255,255,255'},${0.16+hp*0.4})`;
-    x.lineWidth = 1.2+hp*1.5; rRect(x, 4, 4, 152, 152, 22); x.stroke();
-    if(hp > 0) {
-      x.shadowColor = 'rgba(0,200,255,0.3)'; x.shadowBlur = 10*hp;
-      x.strokeStyle = `rgba(0,200,255,${hp*0.3})`; x.lineWidth = 2;
-      rRect(x, 2, 2, 156, 156, 24); x.stroke(); x.shadowBlur = 0;
-    }
-    const img = appIconImages[i];
-    if(img) { x.save(); rRect(x, 30, 20, 100, 100, 16); x.clip(); x.drawImage(img, 30, 20, 100, 100); x.restore(); }
-    else { x.font = '50px sans-serif'; x.textAlign = 'center'; x.fillText('📱', 80, 82); }
-    x.fillStyle = 'rgba(255,255,255,0.85)'; x.font = "600 12px 'Inter',sans-serif"; x.textAlign = 'center'; x.fillText(app.name, 80, 145);
-    texAppBGs.push(mkTex(c));
-  });
+function buildSettingsPanel(){
+const c=document.createElement('canvas');c.width=600;c.height=500;const x=c.getContext('2d');
+x.fillStyle='rgba(8,8,35,0.95)';rR(x,0,0,600,500,24);x.fill();
+x.strokeStyle='rgba(100,180,255,0.2)';x.lineWidth=1.5;rR(x,0,0,600,500,24);x.stroke();
+x.fillStyle='rgba(255,255,255,0.04)';x.fillRect(0,0,600,52);
+x.fillStyle='#fff';x.font="700 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('VR Settings',300,35);
+const chp=(hoverStates['settings_close']||{}).prog||0;
+x.fillStyle=`rgba(255,60,60,${.3+chp*.5})`;x.beginPath();x.arc(560,26,16,0,Math.PI*2);x.fill();
+x.strokeStyle='#fff';x.lineWidth=2.5;x.lineCap='round';
+x.beginPath();x.moveTo(552,18);x.lineTo(568,34);x.stroke();
+x.beginPath();x.moveTo(568,18);x.lineTo(552,34);x.stroke();
+const sets=[{l:'Field of View',k:'fov',v:vrSettings.fov,u:'°',mn:50,mx:120},{l:'IPD',k:'ipd',v:vrSettings.ipd,u:'mm',mn:50,mx:80},{l:'Screen Distance',k:'dist',v:vrSettings.screenDist,u:'mm',mn:20,mx:80},{l:'Oversampling',k:'os',v:vrSettings.oversample,u:'x',mn:.5,mx:2}];
+sets.forEach((s,i)=>{
+const y0=80+i*100;
+x.fillStyle='rgba(255,255,255,0.75)';x.font="500 16px 'Inter',sans-serif";x.textAlign='left';x.fillText(s.l,40,y0+20);
+x.fillStyle='rgba(0,200,255,0.9)';x.font="700 18px 'Inter',sans-serif";x.textAlign='right';x.fillText((s.k==='os'?s.v.toFixed(1):Math.round(s.v)+'')+s.u,560,y0+20);
+const dh=(hoverStates[s.k+'_dec']||{}).prog||0;
+x.fillStyle=`rgba(255,255,255,${.08+dh*.15})`;rR(x,40,y0+35,50,35,10);x.fill();
+x.strokeStyle=`rgba(${dh>0?'0,200,255':'255,255,255'},${.2+dh*.5})`;x.lineWidth=1;rR(x,40,y0+35,50,35,10);x.stroke();
+x.fillStyle=`rgba(255,255,255,${.7+dh*.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('<',65,y0+58);
+const slX=110,slW=370,slY=y0+52;
+x.fillStyle='rgba(255,255,255,0.1)';rR(x,slX,slY-3,slW,6,3);x.fill();
+const pct=(s.v-s.mn)/(s.mx-s.mn);
+x.fillStyle='rgba(0,160,255,0.5)';rR(x,slX,slY-3,slW*pct,6,3);x.fill();
+x.fillStyle='rgba(0,200,255,0.9)';x.beginPath();x.arc(slX+slW*pct,slY,10,0,Math.PI*2);x.fill();
+x.fillStyle='#fff';x.beginPath();x.arc(slX+slW*pct,slY,5,0,Math.PI*2);x.fill();
+const ih=(hoverStates[s.k+'_inc']||{}).prog||0;
+x.fillStyle=`rgba(255,255,255,${.08+ih*.15})`;rR(x,500,y0+35,50,35,10);x.fill();
+x.strokeStyle=`rgba(${ih>0?'0,200,255':'255,255,255'},${.2+ih*.5})`;x.lineWidth=1;rR(x,500,y0+35,50,35,10);x.stroke();
+x.fillStyle=`rgba(255,255,255,${.7+ih*.3})`;x.font="bold 20px 'Inter',sans-serif";x.textAlign='center';x.fillText('>',525,y0+58);
+});
+if(texSettingsPanel)gl.deleteTexture(texSettingsPanel);texSettingsPanel=mkTex(c);
 }
 
-function buildPrefsButton() {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
-  const x = c.getContext('2d');
-  const hs = hoverStates['prefs']; const hp = hs ? hs.prog : 0;
-  x.fillStyle = `rgba(255,255,255,${0.05+hp*0.08})`; rRect(x, 2, 2, 252, 60, 16); x.fill();
-  x.strokeStyle = `rgba(${hp>0?'0,200,255':'255,255,255'},${0.12+hp*0.4})`;
-  x.lineWidth = 1+hp*1.2; rRect(x, 2, 2, 252, 60, 16); x.stroke();
-  x.fillStyle = `rgba(255,255,255,${0.7+hp*0.3})`; x.font = "600 16px 'Inter',sans-serif"; x.textAlign = 'center';
-  x.fillText('⚙ Preferences', 128, 38);
-  if(texPrefsBtn) gl.deleteTexture(texPrefsBtn);
-  texPrefsBtn = mkTex(c);
+function buildCrosshairTexture(){
+const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
+x.strokeStyle='rgba(255,255,255,0.5)';x.lineWidth=2;x.beginPath();x.arc(64,64,18,0,Math.PI*2);x.stroke();
+x.strokeStyle='rgba(255,255,255,0.6)';x.lineWidth=1.5;
+[[64,40,64,52],[64,76,64,88],[40,64,52,64],[76,64,88,64]].forEach(([a,b,c2,d])=>{x.beginPath();x.moveTo(a,b);x.lineTo(c2,d);x.stroke()});
+x.fillStyle='rgba(255,255,255,0.85)';x.beginPath();x.arc(64,64,3,0,Math.PI*2);x.fill();
+if(texCrosshair)gl.deleteTexture(texCrosshair);texCrosshair=mkTex(c);
 }
 
-function buildSettingsPanel() {
-  const c = document.createElement('canvas'); c.width = 600; c.height = 500;
-  const x = c.getContext('2d');
-  x.fillStyle = 'rgba(8,8,35,0.95)'; rRect(x, 0, 0, 600, 500, 24); x.fill();
-  x.strokeStyle = 'rgba(100,180,255,0.2)'; x.lineWidth = 1.5; rRect(x, 0, 0, 600, 500, 24); x.stroke();
-  x.fillStyle = 'rgba(255,255,255,0.04)'; x.fillRect(0, 0, 600, 52);
-  x.fillStyle = '#fff'; x.font = "700 20px 'Inter',sans-serif"; x.textAlign = 'center'; x.fillText('VR Settings', 300, 35);
-
-  const closeHs = hoverStates['settings_close']; const closeHp = closeHs ? closeHs.prog : 0;
-  x.fillStyle = `rgba(255,60,60,${0.3+closeHp*0.5})`; x.beginPath(); x.arc(560, 26, 16, 0, Math.PI*2); x.fill();
-  x.strokeStyle = '#fff'; x.lineWidth = 2.5; x.lineCap = 'round';
-  x.beginPath(); x.moveTo(552, 18); x.lineTo(568, 34); x.stroke();
-  x.beginPath(); x.moveTo(568, 18); x.lineTo(552, 34); x.stroke();
-
-  const settings = [
-    {label:'Lens Field of View', key:'fov', val:vrSettings.fov, unit:'°', min:50, max:120},
-    {label:'Inter Lens Distance', key:'ipd', val:vrSettings.ipd, unit:'mm', min:50, max:80},
-    {label:'Screen to Lens Distance', key:'dist', val:vrSettings.screenDist, unit:'mm', min:20, max:80},
-    {label:'Oversampling', key:'os', val:vrSettings.oversample, unit:'x', min:0.5, max:2.0},
-  ];
-  settings.forEach((s, i) => {
-    const y0 = 80 + i*100;
-    x.fillStyle = 'rgba(255,255,255,0.75)'; x.font = "500 16px 'Inter',sans-serif"; x.textAlign = 'left'; x.fillText(s.label, 40, y0+20);
-    x.fillStyle = 'rgba(0,200,255,0.9)'; x.font = "700 18px 'Inter',sans-serif"; x.textAlign = 'right';
-    x.fillText((s.key==='os' ? s.val.toFixed(1) : Math.round(s.val).toString())+s.unit, 560, y0+20);
-
-    const decHp = (hoverStates[s.key+'_dec']||{}).prog||0;
-    x.fillStyle = `rgba(255,255,255,${0.08+decHp*0.15})`; rRect(x, 40, y0+35, 50, 35, 10); x.fill();
-    x.strokeStyle = `rgba(${decHp>0?'0,200,255':'255,255,255'},${0.2+decHp*0.5})`; x.lineWidth = 1; rRect(x, 40, y0+35, 50, 35, 10); x.stroke();
-    x.fillStyle = `rgba(255,255,255,${0.7+decHp*0.3})`; x.font = "bold 20px 'Inter',sans-serif"; x.textAlign = 'center'; x.fillText('<', 65, y0+58);
-
-    const sliderX = 110, sliderW = 370, sliderY = y0+52;
-    x.fillStyle = 'rgba(255,255,255,0.1)'; rRect(x, sliderX, sliderY-3, sliderW, 6, 3); x.fill();
-    const pct = (s.val - s.min)/(s.max - s.min);
-    x.fillStyle = 'rgba(0,160,255,0.5)'; rRect(x, sliderX, sliderY-3, sliderW*pct, 6, 3); x.fill();
-    const thumbX = sliderX + sliderW*pct;
-    x.fillStyle = 'rgba(0,200,255,0.9)'; x.beginPath(); x.arc(thumbX, sliderY, 10, 0, Math.PI*2); x.fill();
-    x.fillStyle = '#fff'; x.beginPath(); x.arc(thumbX, sliderY, 5, 0, Math.PI*2); x.fill();
-
-    const incHp = (hoverStates[s.key+'_inc']||{}).prog||0;
-    x.fillStyle = `rgba(255,255,255,${0.08+incHp*0.15})`; rRect(x, 500, y0+35, 50, 35, 10); x.fill();
-    x.strokeStyle = `rgba(${incHp>0?'0,200,255':'255,255,255'},${0.2+incHp*0.5})`; x.lineWidth = 1; rRect(x, 500, y0+35, 50, 35, 10); x.stroke();
-    x.fillStyle = `rgba(255,255,255,${0.7+incHp*0.3})`; x.font = "bold 20px 'Inter',sans-serif"; x.textAlign = 'center'; x.fillText('>', 525, y0+58);
-  });
-
-  if(texSettingsPanel) gl.deleteTexture(texSettingsPanel);
-  texSettingsPanel = mkTex(c);
+function buildGazeTexture(p){
+const c=document.createElement('canvas');c.width=128;c.height=128;const x=c.getContext('2d');
+x.strokeStyle='rgba(255,255,255,0.15)';x.lineWidth=5;x.beginPath();x.arc(64,64,32,0,Math.PI*2);x.stroke();
+if(p>0){x.strokeStyle='rgba(0,200,255,0.95)';x.lineWidth=5;x.lineCap='round';x.beginPath();x.arc(64,64,32,-Math.PI/2,-Math.PI/2+Math.PI*2*p);x.stroke()}
+x.fillStyle='rgba(255,255,255,0.85)';x.beginPath();x.arc(64,64,3.5,0,Math.PI*2);x.fill();
+x.strokeStyle='rgba(255,255,255,0.6)';x.lineWidth=1.5;
+[[64,26,64,42],[64,86,64,102],[26,64,42,64],[86,64,102,64]].forEach(([a,b,c2,d])=>{x.beginPath();x.moveTo(a,b);x.lineTo(c2,d);x.stroke()});
+if(texGazeRing)gl.deleteTexture(texGazeRing);texGazeRing=mkTex(c);
 }
 
-function buildCrosshairTexture() {
-  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-  const x = c.getContext('2d');
-  x.strokeStyle = 'rgba(255,255,255,0.5)'; x.lineWidth = 2;
-  x.beginPath(); x.arc(64, 64, 18, 0, Math.PI*2); x.stroke();
-  x.strokeStyle = 'rgba(255,255,255,0.6)'; x.lineWidth = 1.5;
-  [[64,40,64,52],[64,76,64,88],[40,64,52,64],[76,64,88,64]].forEach(([x1,y1,x2,y2]) => {
-    x.beginPath(); x.moveTo(x1,y1); x.lineTo(x2,y2); x.stroke();
-  });
-  x.fillStyle = 'rgba(255,255,255,0.85)'; x.beginPath(); x.arc(64,64,3,0,Math.PI*2); x.fill();
-  if(texCrosshair) gl.deleteTexture(texCrosshair);
-  texCrosshair = mkTex(c);
+function buildCloseTexture(){
+const c=document.createElement('canvas');c.width=80;c.height=80;const x=c.getContext('2d');
+const hp=(hoverStates['close']||{}).prog||0;
+x.fillStyle=`rgba(255,40,40,${.5+hp*.4})`;x.beginPath();x.arc(40,40,28,0,Math.PI*2);x.fill();
+x.strokeStyle='#fff';x.lineWidth=3.5;x.lineCap='round';
+x.beginPath();x.moveTo(26,26);x.lineTo(54,54);x.stroke();
+x.beginPath();x.moveTo(54,26);x.lineTo(26,54);x.stroke();
+if(texCloseBtn)gl.deleteTexture(texCloseBtn);texCloseBtn=mkTex(c);
 }
 
-function buildGazeTexture(prog) {
-  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-  const x = c.getContext('2d');
-  x.strokeStyle = 'rgba(255,255,255,0.15)'; x.lineWidth = 5;
-  x.beginPath(); x.arc(64, 64, 32, 0, Math.PI*2); x.stroke();
-  if(prog > 0) {
-    x.strokeStyle = 'rgba(0,200,255,0.95)'; x.lineWidth = 5; x.lineCap = 'round';
-    x.beginPath(); x.arc(64, 64, 32, -Math.PI/2, -Math.PI/2 + Math.PI*2*prog); x.stroke();
-  }
-  x.fillStyle = 'rgba(255,255,255,0.85)'; x.beginPath(); x.arc(64,64,3.5,0,Math.PI*2); x.fill();
-  x.strokeStyle = 'rgba(255,255,255,0.6)'; x.lineWidth = 1.5;
-  [[64,26,64,42],[64,86,64,102],[26,64,42,64],[86,64,102,64]].forEach(([x1,y1,x2,y2]) => {
-    x.beginPath(); x.moveTo(x1,y1); x.lineTo(x2,y2); x.stroke();
-  });
-  if(texGazeRing) gl.deleteTexture(texGazeRing);
-  texGazeRing = mkTex(c);
-}
-
-function buildCloseTexture() {
-  const c = document.createElement('canvas'); c.width = 80; c.height = 80;
-  const x = c.getContext('2d');
-  const hp = (hoverStates['close']||{}).prog||0;
-  x.fillStyle = `rgba(255,40,40,${0.5+hp*0.4})`; x.beginPath(); x.arc(40,40,28,0,Math.PI*2); x.fill();
-  x.strokeStyle = '#fff'; x.lineWidth = 3.5; x.lineCap = 'round';
-  x.beginPath(); x.moveTo(26,26); x.lineTo(54,54); x.stroke();
-  x.beginPath(); x.moveTo(54,26); x.lineTo(26,54); x.stroke();
-  if(texCloseBtn) gl.deleteTexture(texCloseBtn);
-  texCloseBtn = mkTex(c);
+function buildFistIndicatorTexture(p){
+const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
+x.strokeStyle='rgba(255,255,255,0.1)';x.lineWidth=8;x.beginPath();x.arc(128,128,80,0,Math.PI*2);x.stroke();
+if(p>0){x.strokeStyle='rgba(0,200,255,0.9)';x.lineWidth=8;x.lineCap='round';x.beginPath();x.arc(128,128,80,-Math.PI/2,-Math.PI/2+Math.PI*2*p);x.stroke();x.shadowColor='rgba(0,200,255,0.5)';x.shadowBlur=20;x.beginPath();x.arc(128,128,80,-Math.PI/2,-Math.PI/2+Math.PI*2*p);x.stroke();x.shadowBlur=0}
+x.font='52px sans-serif';x.textAlign='center';x.textBaseline='middle';
+x.fillStyle=p>.5?'rgba(255,255,255,0.9)':'rgba(255,255,255,0.5)';x.fillText('✊',128,120);
+x.fillStyle=`rgba(255,255,255,${.4+p*.5})`;x.font="bold 16px 'Inter',sans-serif";
+x.fillText(p>=1?'OPENING...':'Hold fist '+Math.round(p*100)+'%',128,185);
+if(texFistIndicator)gl.deleteTexture(texFistIndicator);texFistIndicator=mkTex(c);
 }
 
 // ============================================================
-// APP POSITIONS / INTERACTION
+// INTERACTION
 // ============================================================
-function getAppPositions() {
-  const startX = -3.75, spacing = 1.5;
-  return APP_ICONS.map((a, i) => ({...a, pos:[startX+i*spacing, -1.0, -5], w:1.0, h:1.0, idx:i}));
+function getAppPositions(){const sx=-3.75,sp=1.5;return APP_ICONS.map((a,i)=>({...a,pos:[sx+i*sp,-1,-5],w:1,h:1,idx:i}))}
+function getPrefsPos(){return{pos:[0,-2.6,-5],w:2,h:.5}}
+function getSettingsPos(){return{pos:[0,-.5,-5],w:5,h:4.2}}
+function getSettingsClosePos(){return{pos:[2.15,1.5,-5],w:.45,h:.45}}
+function getClosePos(){return{pos:[0,3,-5],w:.65,h:.65}}
+function getSettingsBtnPos(){
+const pW=5,pH=4.2,pX=0,pY=-.5,pZ=-5,cW=600,cH=500;
+const ks=['fov','ipd','dist','os'],res=[];
+ks.forEach((k,i)=>{const cy=80+i*100;
+res.push({id:k+'_dec',pos:[pX+(65/cW-.5)*pW,pY+(.5-((cy+52)/cH))*pH,pZ],w:.42,h:.3});
+res.push({id:k+'_inc',pos:[pX+(525/cW-.5)*pW,pY+(.5-((cy+52)/cH))*pH,pZ],w:.42,h:.3});
+});const sc=getSettingsClosePos();res.push({id:'settings_close',pos:sc.pos,w:sc.w,h:sc.h});return res;
 }
-function getPrefsPos() { return {pos:[0, -2.6, -5], w:2.0, h:0.5}; }
-function getSettingsPos() { return {pos:[0, -0.5, -5], w:5.0, h:4.2}; }
-function getSettingsClosePos() { return {pos:[2.15, 1.5, -5], w:0.45, h:0.45}; }
-function getClosePos() { return {pos:[0, 3.0, -5], w:0.65, h:0.65}; }
-
-function getSettingsButtonPositions() {
-  const pW=5.0, pH=4.2, pX=0, pY=-0.5, pZ=-5;
-  const cW=600, cH=500;
-  const keys = ['fov','ipd','dist','os'];
-  const results = [];
-  keys.forEach((k, i) => {
-    const cy0 = 80+i*100;
-    results.push({id:k+'_dec', pos:[pX+(65/cW-0.5)*pW, pY+(0.5-((cy0+52)/cH))*pH, pZ], w:0.42, h:0.3});
-    results.push({id:k+'_inc', pos:[pX+(525/cW-0.5)*pW, pY+(0.5-((cy0+52)/cH))*pH, pZ], w:0.42, h:0.3});
-  });
-  const scPos = getSettingsClosePos();
-  results.push({id:'settings_close', pos:scPos.pos, w:scPos.w, h:scPos.h});
-  return results;
+function getInteractables(){
+let it=[];
+if(cameraAppOpen)it.push({id:'close',...getClosePos()});
+else if(settingsOpen)it.push(...getSettingsBtnPos());
+else{getAppPositions().forEach(a=>it.push({id:a.id,pos:a.pos,w:a.w,h:a.h}));it.push({id:'prefs',...getPrefsPos()})}
+return it;
 }
+function hitQuad(o,d,p,w,h){if(Math.abs(d[2])<.001)return false;const t=(p[2]-o[2])/d[2];if(t<0)return false;const hx=o[0]+d[0]*t,hy=o[1]+d[1]*t;return hx>=p[0]-w/2&&hx<=p[0]+w/2&&hy>=p[1]-h/2&&hy<=p[1]+h/2}
+function adjustSetting(k,d){const defs={fov:{mn:50,mx:120,s:2},ipd:{mn:50,mx:80,s:1},dist:{mn:20,mx:80,s:1},os:{mn:.5,mx:2,s:.1}};const df=defs[k];if(!df)return;const map={fov:'fov',ipd:'ipd',dist:'screenDist',os:'oversample'};vrSettings[map[k]]=Math.round(clamp(vrSettings[map[k]]+d*df.s,df.mn,df.mx)*100)/100;needSettingsRebuild=true}
+function triggerApp(id){if(id==='camera')openEmbeddedFrame('camera.html');else if(id==='reader')openEmbeddedFrame('reader.html');else if(id==='gallery')openEmbeddedFrame('gallery.html');else if(id==='settings'){settingsOpen=!settingsOpen;cameraAppOpen=false}}
+function triggerAction(id){if(id==='prefs'){settingsOpen=!settingsOpen;cameraAppOpen=false;needSettingsRebuild=true}else if(id==='close')cameraAppOpen=false;else if(id==='settings_close')settingsOpen=false;else if(id.endsWith('_dec'))adjustSetting(id.replace('_dec',''),-1);else if(id.endsWith('_inc'))adjustSetting(id.replace('_inc',''),1)}
+function doTrigger(id){if(['close','prefs','settings_close'].includes(id)||id.endsWith('_dec')||id.endsWith('_inc'))triggerAction(id);else triggerApp(id)}
 
-function getInteractables() {
-  let items = [];
-  if(cameraAppOpen) {
-    items.push({id:'close', ...getClosePos()});
-  } else if(settingsOpen) {
-    items.push(...getSettingsButtonPositions());
-  } else {
-    getAppPositions().forEach(a => items.push({id:a.id, pos:a.pos, w:a.w, h:a.h}));
-    const pp = getPrefsPos();
-    items.push({id:'prefs', pos:pp.pos, w:pp.w, h:pp.h});
-  }
-  return items;
-}
-
-function hitQuad(origin, dir, pos, w, h) {
-  // Ray-plane intersection: plane at z = pos[2]
-  if(Math.abs(dir[2]) < 0.001) return false;
-  const t = (pos[2] - origin[2]) / dir[2];
-  if(t < 0) return false;
-  const hx = origin[0] + dir[0]*t;
-  const hy = origin[1] + dir[1]*t;
-  return hx >= pos[0]-w/2 && hx <= pos[0]+w/2 && hy >= pos[1]-h/2 && hy <= pos[1]+h/2;
-}
-
-function adjustSetting(key, delta) {
-  const defs = {fov:{min:50,max:120,step:2}, ipd:{min:50,max:80,step:1}, dist:{min:20,max:80,step:1}, os:{min:0.5,max:2.0,step:0.1}};
-  const d = defs[key]; if(!d) return;
-  const map = {fov:'fov', ipd:'ipd', dist:'screenDist', os:'oversample'};
-  vrSettings[map[key]] = Math.round(Math.max(d.min, Math.min(d.max, vrSettings[map[key]] + delta*d.step))*100)/100;
-  needSettingsRebuild = true;
-}
-
-function triggerApp(id) {
-  if(id === 'camera') openEmbeddedFrame('camera.html');
-  else if(id === 'reader') openEmbeddedFrame('reader.html');
-  else if(id === 'gallery') openEmbeddedFrame('gallery.html');
-  else if(id === 'settings') { settingsOpen = !settingsOpen; cameraAppOpen = false; }
-}
-
-function triggerAction(id) {
-  if(id === 'prefs') { settingsOpen = !settingsOpen; cameraAppOpen = false; needSettingsRebuild = true; }
-  else if(id === 'close') { cameraAppOpen = false; }
-  else if(id === 'settings_close') { settingsOpen = false; }
-  else if(id.endsWith('_dec')) { adjustSetting(id.replace('_dec',''), -1); }
-  else if(id.endsWith('_inc')) { adjustSetting(id.replace('_inc',''), 1); }
-}
-
-function doTrigger(id) {
-  if(['close','prefs','settings_close'].includes(id) || id.endsWith('_dec') || id.endsWith('_inc')) {
-    triggerAction(id);
-  } else {
-    triggerApp(id);
-  }
-}
-
-function checkGaze(dt, gazeOrigin, gazeDirection) {
-  let hit = null;
-  const interactables = getInteractables();
-
-  for(const item of interactables) {
-    if(hitQuad(gazeOrigin, gazeDirection, item.pos, item.w, item.h)) { hit = item.id; break; }
-  }
-
-  // Controller click
-  if(xrInputPrimary && !xrInputPrimaryPrev) {
-    for(const item of interactables) {
-      if(hitQuad(gazeOrigin, gazeDirection, item.pos, item.w, item.h)) {
-        doTrigger(item.id);
-        gazeTimer = 0; gazeProg = 0; gazeHit = null;
-        return;
-      }
-    }
-  }
-
-  let anyChanged = false;
-  for(const key in hoverStates) {
-    const hs = hoverStates[key];
-    const isHit = hit === key;
-    if(isHit !== hs.hover) { hs.hover = isHit; anyChanged = true; }
-    if(hs.hover) { const o = hs.prog; hs.prog = Math.min(hs.prog + dt*0.5, 1); if(hs.prog - o > 0.01) anyChanged = true; }
-    else { const o = hs.prog; hs.prog = Math.max(hs.prog - dt*2, 0); if(o - hs.prog > 0.01) anyChanged = true; }
-  }
-  if(anyChanged) { needAppRebuild = true; needPrefsRebuild = true; needSettingsRebuild = true; if(cameraAppOpen) buildCloseTexture(); }
-
-  if(hit) {
-    if(gazeHit === hit) {
-      gazeTimer += dt; gazeProg = Math.min(gazeTimer / GAZE_DUR, 1.0);
-      if(gazeTimer >= GAZE_DUR) { doTrigger(hit); gazeTimer = 0; gazeProg = 0; gazeHit = null; }
-    } else { gazeHit = hit; gazeTimer = 0; gazeProg = 0; }
-  } else { gazeHit = null; gazeTimer = 0; gazeProg = 0; }
+function checkGaze(dt,go,gd){
+let hit=null;const its=getInteractables();
+for(const it of its){if(hitQuad(go,gd,it.pos,it.w,it.h)){hit=it.id;break}}
+if(pinchClickThisFrame&&pinchRayOrigin&&pinchRayDir){for(const it of its){if(hitQuad(pinchRayOrigin,pinchRayDir,it.pos,it.w,it.h)){doTrigger(it.id);gazeTimer=0;gazeProg=0;gazeHit=null;return}}}
+if(xrInputPrimary&&!xrInputPrimaryPrev){for(const it of its){if(hitQuad(go,gd,it.pos,it.w,it.h)){doTrigger(it.id);gazeTimer=0;gazeProg=0;gazeHit=null;return}}}
+let ac=false;
+for(const k in hoverStates){const hs=hoverStates[k];const ih=hit===k;if(ih!==hs.hover){hs.hover=ih;ac=true}
+if(hs.hover){const o=hs.prog;hs.prog=Math.min(hs.prog+dt*.5,1);if(hs.prog-o>.01)ac=true}
+else{const o=hs.prog;hs.prog=Math.max(hs.prog-dt*2,0);if(o-hs.prog>.01)ac=true}}
+if(ac){needAppRebuild=true;needPrefsRebuild=true;needSettingsRebuild=true;if(cameraAppOpen)buildCloseTexture()}
+if(hit){if(gazeHit===hit){gazeTimer+=dt;gazeProg=Math.min(gazeTimer/GAZE_DUR,1);if(gazeTimer>=GAZE_DUR){doTrigger(hit);gazeTimer=0;gazeProg=0;gazeHit=null}}else{gazeHit=hit;gazeTimer=0;gazeProg=0}}
+else{gazeHit=null;gazeTimer=0;gazeProg=0}
 }
 
 // ============================================================
-// RENDER HELPERS
+// HAND TRACKING (WebXR only)
 // ============================================================
-function drawSphere(projMat, viewMat) {
-  gl.useProgram(progPano);
-  gl.bindBuffer(gl.ARRAY_BUFFER, sphereVBO);
-  gl.enableVertexAttribArray(progPano._aP);
-  gl.vertexAttribPointer(progPano._aP, 3, gl.FLOAT, false, 20, 0);
-  gl.enableVertexAttribArray(progPano._aT);
-  gl.vertexAttribPointer(progPano._aT, 2, gl.FLOAT, false, 20, 12);
-  gl.uniformMatrix4fv(progPano._uProj, false, projMat);
-  gl.uniformMatrix4fv(progPano._uView, false, viewMat);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, panoTexture); gl.uniform1i(progPano._uTex, 0);
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereIBO);
-  gl.drawElements(gl.TRIANGLES, sphereCount, gl.UNSIGNED_SHORT, 0);
+function processHands(frame,rs,dt){
+pinchClickThisFrame=false;pinchRayOrigin=null;pinchRayDir=null;
+if(!xrSession||!frame)return;
+['left','right'].forEach(h=>{
+const hd=handData[h];hd.prevPinch=hd.pinch;let hand=null;
+for(const s of xrSession.inputSources){if(s.hand&&s.handedness===h){hand=s;break}}
+if(!hand||!hand.hand){hd.visible=false;hd.isFist=false;hd.fistConf=lerp(hd.fistConf,0,.15);hd.pinch=false;hd.pinchConf=lerp(hd.pinchConf,0,.15);return}
+hd.visible=true;const joints=[];
+for(let j=0;j<25;j++){const js=hand.hand.get(j);if(!js){joints.push(null);continue}const po=frame.getJointPose(js,rs);if(!po){joints.push(null);continue}const p=po.transform.position;joints.push({x:p.x,y:p.y,z:p.z,r:po.radius||.008})}
+hd.joints=joints;
+const SM=.35;
+for(let j=0;j<25;j++){if(!joints[j])continue;if(!hd.smoothJoints[j])hd.smoothJoints[j]={x:joints[j].x,y:joints[j].y,z:joints[j].z,r:joints[j].r};
+else{hd.smoothJoints[j].x=lerp(hd.smoothJoints[j].x,joints[j].x,SM);hd.smoothJoints[j].y=lerp(hd.smoothJoints[j].y,joints[j].y,SM);hd.smoothJoints[j].z=lerp(hd.smoothJoints[j].z,joints[j].z,SM);hd.smoothJoints[j].r=lerp(hd.smoothJoints[j].r,joints[j].r||.008,SM)}}
+const th=hd.smoothJoints[JOINT.THUMB_TIP],ix=hd.smoothJoints[JOINT.INDEX_TIP];
+if(th&&ix){const pd=v3d(th,ix);const tp=pd<.025?1:pd<.045?1-(pd-.025)/.02:0;hd.pinchConf=lerp(hd.pinchConf,tp,.3);hd.pinch=hd.pinchConf>.6;hd.pinchPt={x:(th.x+ix.x)/2,y:(th.y+ix.y)/2,z:(th.z+ix.z)/2}}
+const wr=hd.smoothJoints[JOINT.WRIST];
+const tips=[JOINT.INDEX_TIP,JOINT.MIDDLE_TIP,JOINT.RING_TIP,JOINT.PINKY_TIP];
+const mcs=[JOINT.INDEX_MC,JOINT.MIDDLE_MC,JOINT.RING_MC,JOINT.PINKY_MC];
+if(wr){let fs=0;tips.forEach((ti,idx)=>{const tp2=hd.smoothJoints[ti],mc=hd.smoothJoints[mcs[idx]];if(tp2&&mc){const d=v3d(tp2,mc);fs+=d<.04?1:d<.06?1-(d-.04)/.02:0}});
+const tt=hd.smoothJoints[JOINT.THUMB_TIP],tm=hd.smoothJoints[JOINT.THUMB_MC];
+if(tt&&tm){const td=v3d(tt,tm);fs+=td<.04?1:td<.06?1-(td-.04)/.02:0}
+hd.fistConf=lerp(hd.fistConf,fs/5,.2);hd.isFist=hd.fistConf>.7}
+hd.indexTipWorld=hd.smoothJoints[JOINT.INDEX_TIP];hd.wristWorld=hd.smoothJoints[JOINT.WRIST];
+});
+['left','right'].forEach(h=>{const hd=handData[h];
+if(hd.pinch&&!hd.prevPinch){pinchClickThisFrame=true;
+if(hd.wristWorld&&hd.indexTipWorld){pinchRayOrigin=[hd.pinchPt.x,hd.pinchPt.y,hd.pinchPt.z];const dx=hd.indexTipWorld.x-hd.wristWorld.x,dy=hd.indexTipWorld.y-hd.wristWorld.y,dz=hd.indexTipWorld.z-hd.wristWorld.z;pinchRayDir=v3n(dx,dy,dz)}}});
+const af=handData.left.isFist||handData.right.isFist;
+if(af){fistTimer+=dt;fistProg=Math.min(fistTimer/FIST_DUR,1);if(fistTimer>=FIST_DUR&&!fistActive){fistActive=true;settingsOpen=!settingsOpen;cameraAppOpen=false;needSettingsRebuild=true;fistTimer=0;fistProg=0;fistActive=false}}
+else{fistTimer=Math.max(0,fistTimer-dt*3);fistProg=Math.min(fistTimer/FIST_DUR,1);fistActive=false}
 }
 
-function drawTexQuad(projMat, viewMat, pos, w, h, tex, alpha) {
-  if(!tex) return;
-  alpha = alpha !== undefined ? alpha : 1.0;
-  gl.useProgram(progUI);
-  let mdl = identityMat();
-  mdl = translateMat(mdl, pos[0], pos[1], pos[2]);
-  mdl = scaleMat(mdl, w, h, 1);
-  const mvp = mulMat(projMat, mulMat(viewMat, mdl));
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
-  gl.enableVertexAttribArray(progUI._aP);
-  gl.vertexAttribPointer(progUI._aP, 3, gl.FLOAT, false, 20, 0);
-  gl.enableVertexAttribArray(progUI._aT);
-  gl.vertexAttribPointer(progUI._aT, 2, gl.FLOAT, false, 20, 12);
-  gl.uniformMatrix4fv(progUI._uMVP, false, mvp);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex); gl.uniform1i(progUI._uTex, 0);
-  gl.uniform1f(progUI._uAlpha, alpha);
-  gl.drawArrays(gl.TRIANGLES, 0, 6);
+// ============================================================
+// DEVICE ORIENTATION (Apple / Cardboard fallback)
+// ============================================================
+function initDeviceOrientation(){
+const handler=e=>{
+if(e.alpha===null&&e.beta===null&&e.gamma===null)return;
+gyroReady=true;
+gyroAlpha=e.alpha||0;gyroBeta=e.beta||0;gyroGamma=e.gamma||0;
+if(initialAlpha===null)initialAlpha=gyroAlpha;
+};
+if(isIOS&&typeof DeviceOrientationEvent.requestPermission==='function'){
+// iOS 13+ requires permission
+DeviceOrientationEvent.requestPermission().then(r=>{
+if(r==='granted'){window.addEventListener('deviceorientation',handler,true);useDeviceOrientation=true}
+}).catch(()=>{});
+}else{
+window.addEventListener('deviceorientation',handler,true);
+useDeviceOrientation=true;
+}
 }
 
-function renderScene(projMat, viewMat) {
-  // Pano sphere (no depth test so it's always behind)
-  gl.disable(gl.DEPTH_TEST);
-  drawSphere(projMat, viewMat);
-  gl.enable(gl.DEPTH_TEST);
+function getOrientationViewMatrix(){
+/* Convert device orientation to view matrix for landscape VR
+   Using the standard W3C deviceorientation → rotation matrix approach */
+const alpha=deg2rad(gyroAlpha);
+const beta=deg2rad(gyroBeta);
+const gamma=deg2rad(gyroGamma);
 
-  // Clock card
-  drawTexQuad(projMat, viewMat, [0, 2.2, -5], 4, 1.8, texCard);
+// Rotation matrix from Euler angles (ZXY convention per W3C spec)
+const cA=Math.cos(alpha),sA=Math.sin(alpha);
+const cB=Math.cos(beta),sB=Math.sin(beta);
+const cG=Math.cos(gamma),sG=Math.sin(gamma);
 
-  if(cameraAppOpen) {
-    const cp = getClosePos();
-    drawTexQuad(projMat, viewMat, cp.pos, cp.w-0.15, cp.h-0.15, texCloseBtn);
-  } else if(settingsOpen) {
-    const sp = getSettingsPos();
-    if(texSettingsPanel) drawTexQuad(projMat, viewMat, sp.pos, sp.w, sp.h, texSettingsPanel);
-  } else {
-    const apps = getAppPositions();
-    apps.forEach((a, i) => { if(texAppBGs[i]) drawTexQuad(projMat, viewMat, a.pos, a.w, a.h, texAppBGs[i]); });
-    const pp = getPrefsPos();
-    if(texPrefsBtn) drawTexQuad(projMat, viewMat, pp.pos, pp.w, pp.h, texPrefsBtn);
-  }
+// Device orientation rotation matrix (world-to-device)
+const R=new Float32Array(16);
+R[0]=cA*cG-sA*sB*sG;  R[4]=-cB*sA; R[8]=cA*sG+cG*sA*sB;   R[12]=0;
+R[1]=cG*sA+cA*sB*sG;   R[5]=cA*cB;  R[9]=sA*sG-cA*cG*sB;   R[13]=0;
+R[2]=-cB*sG;            R[6]=sB;     R[10]=cB*cG;            R[14]=0;
+R[3]=0;R[7]=0;R[11]=0;R[15]=1;
 
-  // Crosshair / gaze (fixed in front of user's view)
-  gl.disable(gl.DEPTH_TEST);
-  const invView = invertMat4(viewMat);
-  const eyePos = [invView[12], invView[13], invView[14]];
-  const fwd = [-invView[8], -invView[9], -invView[10]];
-  const crossDist = 5.0;
-  const crossPos = [
-    eyePos[0] + fwd[0]*crossDist,
-    eyePos[1] + fwd[1]*crossDist,
-    eyePos[2] + fwd[2]*crossDist
-  ];
-  const crossTex = gazeHit ? texGazeRing : texCrosshair;
-  const crossSize = gazeHit ? 0.35 : 0.2;
+// Screen orientation compensation for landscape
+let angle=0;
+if(screen.orientation&&typeof screen.orientation.angle==='number')angle=screen.orientation.angle;
+else if(typeof window.orientation==='number')angle=window.orientation;
 
-  // Build a billboard matrix for crosshair
-  let billMdl = identityMat();
-  billMdl = translateMat(billMdl, crossPos[0], crossPos[1], crossPos[2]);
-  // Extract rotation from inverse view for billboarding
-  const billRot = new Float32Array(16);
-  billRot.set(invView);
-  billRot[12] = 0; billRot[13] = 0; billRot[14] = 0; billRot[15] = 1;
-  billMdl = mulMat(billMdl, billRot);
-  billMdl = scaleMat(billMdl, crossSize, crossSize, 1);
+const sa=deg2rad(-angle);
+const cSA=Math.cos(sa),sSA=Math.sin(sa);
+const screenRot=I();
+screenRot[0]=cSA;screenRot[1]=sSA;screenRot[4]=-sSA;screenRot[5]=cSA;
 
-  if(crossTex) {
-    gl.useProgram(progUI);
-    const mvp = mulMat(projMat, mulMat(viewMat, billMdl));
-    gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
-    gl.enableVertexAttribArray(progUI._aP);
-    gl.vertexAttribPointer(progUI._aP, 3, gl.FLOAT, false, 20, 0);
-    gl.enableVertexAttribArray(progUI._aT);
-    gl.vertexAttribPointer(progUI._aT, 2, gl.FLOAT, false, 20, 12);
-    gl.uniformMatrix4fv(progUI._uMVP, false, mvp);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, crossTex); gl.uniform1i(progUI._uTex, 0);
-    gl.uniform1f(progUI._uAlpha, 1.0);
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-  }
-  gl.enable(gl.DEPTH_TEST);
+// 90 degree rotation to convert from phone-up to camera-forward
+const worldFix=I();
+worldFix[5]=0;worldFix[6]=1;worldFix[9]=-1;worldFix[10]=0;
+
+let viewMat=mul(screenRot,R);
+viewMat=mul(worldFix,viewMat);
+
+// Compensate initial alpha so forward = initial direction
+if(initialAlpha!==null){
+const comp=deg2rad(-(initialAlpha));
+viewMat=mul(rYM(I(),comp),viewMat);
+}
+
+return viewMat;
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function drawSphere(p,v){
+gl.useProgram(progPano);gl.bindBuffer(gl.ARRAY_BUFFER,sphereVBO);
+gl.enableVertexAttribArray(progPano._aP);gl.vertexAttribPointer(progPano._aP,3,gl.FLOAT,false,20,0);
+gl.enableVertexAttribArray(progPano._aT);gl.vertexAttribPointer(progPano._aT,2,gl.FLOAT,false,20,12);
+gl.uniformMatrix4fv(progPano._uProj,false,p);gl.uniformMatrix4fv(progPano._uView,false,v);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,panoTexture);gl.uniform1i(progPano._uTex,0);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphereIBO);gl.drawElements(gl.TRIANGLES,sphereCount,gl.UNSIGNED_SHORT,0);
+}
+
+function drawTQ(p,v,pos,w,h,tex,alpha){
+if(!tex)return;alpha=alpha!==undefined?alpha:1;
+gl.useProgram(progUI);let m=I();m=trM(m,pos[0],pos[1],pos[2]);m=scM(m,w,h,1);
+const mvp=mul(p,mul(v,m));
+gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);
+gl.enableVertexAttribArray(progUI._aP);gl.vertexAttribPointer(progUI._aP,3,gl.FLOAT,false,20,0);
+gl.enableVertexAttribArray(progUI._aT);gl.vertexAttribPointer(progUI._aT,2,gl.FLOAT,false,20,12);
+gl.uniformMatrix4fv(progUI._uMVP,false,mvp);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(progUI._uTex,0);
+gl.uniform1f(progUI._uAlpha,alpha);gl.drawArrays(gl.TRIANGLES,0,6);
+}
+
+function drawBB(p,v,pos,w,h,tex,alpha){
+if(!tex)return;alpha=alpha!==undefined?alpha:1;
+const iv=inv4(v);let m=I();m=trM(m,pos[0],pos[1],pos[2]);
+const br=new Float32Array(16);br.set(iv);br[12]=0;br[13]=0;br[14]=0;br[15]=1;
+m=mul(m,br);m=scM(m,w,h,1);
+gl.useProgram(progUI);const mvp=mul(p,mul(v,m));
+gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);
+gl.enableVertexAttribArray(progUI._aP);gl.vertexAttribPointer(progUI._aP,3,gl.FLOAT,false,20,0);
+gl.enableVertexAttribArray(progUI._aT);gl.vertexAttribPointer(progUI._aT,2,gl.FLOAT,false,20,12);
+gl.uniformMatrix4fv(progUI._uMVP,false,mvp);
+gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(progUI._uTex,0);
+gl.uniform1f(progUI._uAlpha,alpha);gl.drawArrays(gl.TRIANGLES,0,6);
+}
+
+function renderHandSkel(p,v,h){
+const hd=handData[h];if(!hd.visible)return;const j=hd.smoothJoints;
+gl.useProgram(progHand);
+HAND_CONNS.forEach(([a,b])=>{const ja=j[a],jb=j[b];if(!ja||!jb)return;
+gl.bindBuffer(gl.ARRAY_BUFFER,boneVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([ja.x,ja.y,ja.z,jb.x,jb.y,jb.z]),gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(progHand._aP);gl.vertexAttribPointer(progHand._aP,3,gl.FLOAT,false,0,0);
+gl.uniformMatrix4fv(progHand._uMVP,false,mul(p,v));
+const fi=Math.min(Math.floor(Math.max(a,b)/5),4),fc=FINGER_COLS[fi];
+gl.uniform4f(progHand._uColor,fc[0],fc[1],fc[2],.5);gl.uniform1f(progHand._uSize,1);gl.drawArrays(gl.LINES,0,2);
+});
+for(let i=0;i<25;i++){const jt=j[i];if(!jt)continue;
+gl.bindBuffer(gl.ARRAY_BUFFER,boneVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([jt.x,jt.y,jt.z]),gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(progHand._aP);gl.vertexAttribPointer(progHand._aP,3,gl.FLOAT,false,0,0);
+gl.uniformMatrix4fv(progHand._uMVP,false,mul(p,v));
+const fi=Math.min(Math.floor(i/5),4),fc=FINGER_COLS[fi];
+const ip=(i===JOINT.THUMB_TIP||i===JOINT.INDEX_TIP);
+gl.uniform1f(progHand._uSize,ip?(hd.pinch?18:12):8);
+gl.uniform4f(progHand._uColor,fc[0],fc[1],fc[2],ip?(hd.pinch?1:.9):.75);gl.drawArrays(gl.POINTS,0,1);
+if(ip){gl.uniform1f(progHand._uSize,(ip?(hd.pinch?18:12):8)+5);gl.uniform4f(progHand._uColor,1,1,1,.35);gl.drawArrays(gl.POINTS,0,1)}
+}
+if(hd.pinchPt&&hd.pinchConf>.2){const pp=hd.pinchPt;
+gl.bindBuffer(gl.ARRAY_BUFFER,boneVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([pp.x,pp.y,pp.z]),gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(progHand._aP);gl.vertexAttribPointer(progHand._aP,3,gl.FLOAT,false,0,0);
+gl.uniformMatrix4fv(progHand._uMVP,false,mul(p,v));
+gl.uniform1f(progHand._uSize,hd.pinch?28:18);gl.uniform4f(progHand._uColor,0,1,.6,hd.pinchConf*(hd.pinch?.8:.3));gl.drawArrays(gl.POINTS,0,1);
+if(hd.pinch){gl.uniform1f(progHand._uSize,36);gl.uniform4f(progHand._uColor,0,1,.6,.15);gl.drawArrays(gl.POINTS,0,1)}}
+if(hd.pinch&&hd.wristWorld&&hd.indexTipWorld){const w2=hd.wristWorld,it=hd.indexTipWorld;
+const dn=v3n(it.x-w2.x,it.y-w2.y,it.z-w2.z);
+gl.bindBuffer(gl.ARRAY_BUFFER,boneVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([it.x,it.y,it.z,it.x+dn[0]*8,it.y+dn[1]*8,it.z+dn[2]*8]),gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(progHand._aP);gl.vertexAttribPointer(progHand._aP,3,gl.FLOAT,false,0,0);
+gl.uniformMatrix4fv(progHand._uMVP,false,mul(p,v));gl.uniform4f(progHand._uColor,0,.8,1,.25);gl.drawArrays(gl.LINES,0,2)}
+}
+
+function renderScene(p,v){
+gl.disable(gl.DEPTH_TEST);drawSphere(p,v);gl.enable(gl.DEPTH_TEST);
+drawTQ(p,v,[0,2.2,-5],4,1.8,texCard);
+if(cameraAppOpen){drawTQ(p,v,getClosePos().pos,getClosePos().w-.15,getClosePos().h-.15,texCloseBtn)}
+else if(settingsOpen){if(texSettingsPanel)drawTQ(p,v,getSettingsPos().pos,getSettingsPos().w,getSettingsPos().h,texSettingsPanel)}
+else{getAppPositions().forEach((a,i)=>{if(texAppBGs[i])drawTQ(p,v,a.pos,a.w,a.h,texAppBGs[i])});if(texPrefsBtn)drawTQ(p,v,getPrefsPos().pos,getPrefsPos().w,getPrefsPos().h,texPrefsBtn)}
+gl.disable(gl.DEPTH_TEST);
+renderHandSkel(p,v,'left');renderHandSkel(p,v,'right');
+if(fistProg>.01){buildFistIndicatorTexture(fistProg);const iv=inv4(v);const ep=[iv[12],iv[13],iv[14]],fw=[-iv[8],-iv[9],-iv[10]],up=[iv[4],iv[5],iv[6]];
+drawBB(p,v,[ep[0]+fw[0]*2+up[0]*-.6,ep[1]+fw[1]*2+up[1]*-.6,ep[2]+fw[2]*2+up[2]*-.6],.5,.5,texFistIndicator)}
+const iv2=inv4(v),ep2=[iv2[12],iv2[13],iv2[14]],fw2=[-iv2[8],-iv2[9],-iv2[10]];
+const cd=5,cp=[ep2[0]+fw2[0]*cd,ep2[1]+fw2[1]*cd,ep2[2]+fw2[2]*cd];
+drawBB(p,v,cp,gazeHit?.35:.2,gazeHit?.35:.2,gazeHit?texGazeRing:texCrosshair);
+gl.enable(gl.DEPTH_TEST);
 }
 
 // ============================================================
 // LOADING
 // ============================================================
-function loadPanoImage() {
-  return new Promise((resolve) => {
-    const img = new Image(); img.crossOrigin = 'anonymous';
-    const bf = document.getElementById('bar-fg');
+function loadPanoImage(){
+return new Promise(resolve=>{
+const img=new Image();img.crossOrigin='anonymous';const bf=document.getElementById('bar-fg');
+img.onload=()=>{bf.style.width='100%';panoImage=img;resolve(img)};
+img.onerror=()=>{const c=document.createElement('canvas');c.width=2048;c.height=1024;const cx=c.getContext('2d');
+const grd=cx.createLinearGradient(0,0,2048,1024);grd.addColorStop(0,'#0a0a3a');grd.addColorStop(.5,'#0c1e4a');grd.addColorStop(1,'#0a0a3a');
+cx.fillStyle=grd;cx.fillRect(0,0,2048,1024);for(let i=0;i<300;i++){cx.fillStyle=`rgba(255,255,255,${Math.random()*.5+.1})`;cx.beginPath();cx.arc(Math.random()*2048,Math.random()*1024,Math.random()*1.5+.3,0,Math.PI*2);cx.fill()}
+bf.style.width='100%';panoImage=c;resolve(c)};
+const xhr=new XMLHttpRequest();xhr.open('GET',PANO_URL,true);xhr.responseType='blob';
+xhr.onprogress=e=>{if(e.lengthComputable)bf.style.width=(e.loaded/e.total*100)+'%'};
+xhr.onload=()=>{if(xhr.status===200)img.src=URL.createObjectURL(xhr.response);else img.src=PANO_URL};
+xhr.onerror=()=>{img.src=PANO_URL};xhr.send();
+})}
 
-    img.onload = () => {
-      bf.style.width = '100%';
-      panoImage = img;
-      resolve(img);
-    };
-    img.onerror = () => {
-      // Generate fallback
-      const c = document.createElement('canvas'); c.width = 2048; c.height = 1024;
-      const cx = c.getContext('2d');
-      const grd = cx.createLinearGradient(0,0,2048,1024);
-      grd.addColorStop(0,'#0a0a3a'); grd.addColorStop(0.5,'#0c1e4a'); grd.addColorStop(1,'#0a0a3a');
-      cx.fillStyle = grd; cx.fillRect(0,0,2048,1024);
-      for(let i=0; i<300; i++) {
-        cx.fillStyle = `rgba(255,255,255,${Math.random()*0.5+0.1})`;
-        cx.beginPath(); cx.arc(Math.random()*2048, Math.random()*1024, Math.random()*1.5+0.3, 0, Math.PI*2); cx.fill();
-      }
-      bf.style.width = '100%';
-      panoImage = c;
-      resolve(c);
-    };
-
-    // XHR for progress
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', PANO_URL, true); xhr.responseType = 'blob';
-    xhr.onprogress = e => { if(e.lengthComputable) { bf.style.width = (e.loaded/e.total*100)+'%'; } };
-    xhr.onload = () => {
-      if(xhr.status === 200) {
-        const url = URL.createObjectURL(xhr.response);
-        img.src = url;
-      } else img.src = PANO_URL;
-    };
-    xhr.onerror = () => { img.src = PANO_URL; };
-    xhr.send();
-  });
-}
-
-function loadAppIcons() {
-  appIconImages = new Array(APP_ICONS.length).fill(null);
-  APP_ICONS.forEach((app, i) => {
-    const img = new Image(); img.crossOrigin = 'anonymous';
-    img.onload = () => { appIconImages[i] = img; appIconsLoaded++; if(texReady) needAppRebuild = true; };
-    img.onerror = () => { appIconsLoaded++; };
-    img.src = app.url;
-  });
+function loadAppIcons(){
+appIconImages=new Array(APP_ICONS.length).fill(null);
+APP_ICONS.forEach((a,i)=>{const img=new Image();img.crossOrigin='anonymous';
+img.onload=()=>{appIconImages[i]=img;appIconsLoaded++;if(texReady)needAppRebuild=true};
+img.onerror=()=>{appIconsLoaded++};img.src=a.url});
 }
 
 // ============================================================
-// WEBXR
+// GL INIT
 // ============================================================
-let xrSupported = false;
-let xrInlineSupported = false;
-
-async function checkXRSupport() {
-  const statusEl = document.getElementById('status-text');
-  const vrBtn = document.getElementById('enter-vr-btn');
-  const inlineBtn = document.getElementById('enter-inline-btn');
-
-  if(!navigator.xr) {
-    statusEl.textContent = 'WebXR not available in this browser. Use inline mode.';
-    vrBtn.disabled = true; vrBtn.textContent = 'VR Not Available';
-    inlineBtn.style.display = 'block';
-    return;
-  }
-
-  try {
-    xrSupported = await navigator.xr.isSessionSupported('immersive-vr');
-  } catch(e) { xrSupported = false; }
-
-  try {
-    xrInlineSupported = await navigator.xr.isSessionSupported('inline');
-  } catch(e) { xrInlineSupported = false; }
-
-  if(xrSupported) {
-    vrBtn.disabled = false;
-    vrBtn.textContent = 'Enter VR';
-    statusEl.textContent = 'WebXR immersive VR is supported! Put on your headset and click Enter VR.';
-  } else {
-    vrBtn.disabled = true;
-    vrBtn.textContent = 'VR Not Supported';
-    statusEl.textContent = 'Immersive VR not supported on this device.';
-  }
-
-  inlineBtn.style.display = 'block';
-}
-
-async function startImmersiveSession() {
-  if(!navigator.xr || !xrSupported) return;
-
-  try {
-    xrSession = await navigator.xr.requestSession('immersive-vr', {
-      requiredFeatures: ['local'],
-      optionalFeatures: ['local-floor', 'hand-tracking']
-    });
-  } catch(e) {
-    console.error('Failed to start XR session:', e);
-    document.getElementById('status-text').textContent = 'Failed to start VR: ' + e.message;
-    return;
-  }
-
-  isImmersive = true;
-  isInlineMode = false;
-  document.getElementById('start-screen').style.opacity = '0';
-  setTimeout(() => { document.getElementById('start-screen').style.display = 'none'; }, 800);
-  document.getElementById('canvas-container').style.display = 'block';
-
-  await setupXRSession();
-}
-
-async function startInlineSession() {
-  isImmersive = false;
-  isInlineMode = true;
-
-  document.getElementById('start-screen').style.opacity = '0';
-  setTimeout(() => { document.getElementById('start-screen').style.display = 'none'; }, 800);
-  document.getElementById('canvas-container').style.display = 'block';
-
-  if(navigator.xr && xrInlineSupported) {
-    try {
-      xrSession = await navigator.xr.requestSession('inline');
-      await setupXRSession();
-      return;
-    } catch(e) {
-      console.warn('Inline XR session failed, using fallback:', e);
-    }
-  }
-
-  // Pure fallback without XR
-  setupFallbackRendering();
-}
-
-async function setupXRSession() {
-  canvas = document.getElementById('glcanvas');
-  gl = canvas.getContext('webgl', {xrCompatible: true, antialias: true, alpha: false, depth: true});
-  if(!gl) { alert('WebGL not supported'); return; }
-
-  initGL();
-
-  const layer = new XRWebGLLayer(xrSession, gl);
-  await xrSession.updateRenderState({ baseLayer: layer });
-
-  try {
-    xrRefSpace = await xrSession.requestReferenceSpace('local-floor');
-  } catch(e) {
-    try {
-      xrRefSpace = await xrSession.requestReferenceSpace('local');
-    } catch(e2) {
-      xrRefSpace = await xrSession.requestReferenceSpace('viewer');
-    }
-  }
-
-  xrSession.addEventListener('end', onSessionEnd);
-  xrSession.addEventListener('selectstart', () => { xrInputPrimary = true; });
-  xrSession.addEventListener('selectend', () => { xrInputPrimary = false; });
-
-  prevTime = performance.now();
-  xrSession.requestAnimationFrame(xrRenderLoop);
-}
-
-function setupFallbackRendering() {
-  canvas = document.getElementById('glcanvas');
-  canvas.width = window.innerWidth * devicePixelRatio;
-  canvas.height = window.innerHeight * devicePixelRatio;
-  gl = canvas.getContext('webgl', {antialias: true, alpha: false, depth: true});
-  if(!gl) { alert('WebGL not supported'); return; }
-
-  initGL();
-  initFallbackInput();
-
-  prevTime = performance.now();
-  requestAnimationFrame(fallbackRenderLoop);
-}
-
-function initGL() {
-  gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-  // Shaders
-  progPano = mkProgram(VS_PANO, FS_PANO);
-  progPano._aP = gl.getAttribLocation(progPano, 'aP');
-  progPano._aT = gl.getAttribLocation(progPano, 'aT');
-  progPano._uProj = gl.getUniformLocation(progPano, 'uProj');
-  progPano._uView = gl.getUniformLocation(progPano, 'uView');
-  progPano._uTex = gl.getUniformLocation(progPano, 'uTex');
-
-  progUI = mkProgram(VS_UI, FS_UI);
-  progUI._aP = gl.getAttribLocation(progUI, 'aP');
-  progUI._aT = gl.getAttribLocation(progUI, 'aT');
-  progUI._uMVP = gl.getUniformLocation(progUI, 'uMVP');
-  progUI._uTex = gl.getUniformLocation(progUI, 'uTex');
-  progUI._uAlpha = gl.getUniformLocation(progUI, 'uAlpha');
-
-  // Geometry
-  buildSphere(40, 40, 50);
-  quadVBO = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
-  gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTS, gl.STATIC_DRAW);
-
-  // Pano texture
-  panoTexture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, panoTexture);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, panoImage);
-  setTexParams(gl.TEXTURE_2D);
-
-  // Temp canvases
-  _cardCanvas = document.createElement('canvas'); _cardCanvas.width = 512; _cardCanvas.height = 200;
-  _cardCtx = _cardCanvas.getContext('2d');
-
-  // Build initial textures
-  updateCardTexture();
-  buildAppCardTextures();
-  buildCrosshairTexture();
-  buildGazeTexture(0);
-  buildCloseTexture();
-  buildPrefsButton();
-  buildSettingsPanel();
-  texReady = true;
-}
-
-function onSessionEnd() {
-  xrSession = null;
-  xrRefSpace = null;
-  isImmersive = false;
-  document.getElementById('start-screen').style.display = 'flex';
-  document.getElementById('start-screen').style.opacity = '1';
-  document.getElementById('canvas-container').style.display = 'none';
+function initGL(){
+gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+progPano=mkProg(VS_P,FS_P);progPano._aP=gl.getAttribLocation(progPano,'aP');progPano._aT=gl.getAttribLocation(progPano,'aT');
+progPano._uProj=gl.getUniformLocation(progPano,'uProj');progPano._uView=gl.getUniformLocation(progPano,'uView');progPano._uTex=gl.getUniformLocation(progPano,'uTex');
+progUI=mkProg(VS_U,FS_U);progUI._aP=gl.getAttribLocation(progUI,'aP');progUI._aT=gl.getAttribLocation(progUI,'aT');
+progUI._uMVP=gl.getUniformLocation(progUI,'uMVP');progUI._uTex=gl.getUniformLocation(progUI,'uTex');progUI._uAlpha=gl.getUniformLocation(progUI,'uAlpha');
+progHand=mkProg(VS_H,FS_H);progHand._aP=gl.getAttribLocation(progHand,'aP');
+progHand._uMVP=gl.getUniformLocation(progHand,'uMVP');progHand._uColor=gl.getUniformLocation(progHand,'uColor');progHand._uSize=gl.getUniformLocation(progHand,'uSize');
+buildSphere(40,40,50);
+quadVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);gl.bufferData(gl.ARRAY_BUFFER,QV,gl.STATIC_DRAW);
+boneVBO=gl.createBuffer();
+panoTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,panoTexture);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,panoImage);setTP(gl.TEXTURE_2D);
+_cardCanvas=document.createElement('canvas');_cardCanvas.width=512;_cardCanvas.height=200;_cardCtx=_cardCanvas.getContext('2d');
+updateCardTexture();buildAppCardTextures();buildCrosshairTexture();buildGazeTexture(0);buildCloseTexture();buildPrefsButton();buildSettingsPanel();buildFistIndicatorTexture(0);
+texReady=true;
 }
 
 // ============================================================
-// WEBXR RENDER LOOP
+// WEBXR SESSION
 // ============================================================
-let lastTexUpdateTime = 0;
-let frameCount = 0;
+let xrSupported=false;
 
-function xrRenderLoop(time, frame) {
-  if(!xrSession) return;
-  xrSession.requestAnimationFrame(xrRenderLoop);
+async function checkXRSupport(){
+const badge=document.getElementById('device-badge');
+const vrBtn=document.getElementById('enter-vr-btn');
+const cbBtn=document.getElementById('enter-cardboard-btn');
+const inBtn=document.getElementById('enter-inline-btn');
+const stat=document.getElementById('status-text');
 
-  const dt = Math.min((time - prevTime) / 1000, 0.1);
-  prevTime = time;
-  frameCount++;
+if(isApple){
+badge.className='device-badge apple';badge.textContent='🍎 Apple Device Detected';
+vrBtn.style.display='none';
+cbBtn.style.display='block';cbBtn.textContent='📱 Enter Cardboard VR';
+inBtn.style.display='block';
+stat.textContent='Safari doesn\'t support WebXR. Using gyroscope-based VR with stereoscopic rendering. Works great with Google Cardboard!';
+return;
+}
 
-  // Update textures periodically
-  if(time - lastTexUpdateTime > 500) {
-    updateCardTexture();
-    lastTexUpdateTime = time;
-  }
-  if(needAppRebuild) { buildAppCardTextures(); needAppRebuild = false; }
-  if(needPrefsRebuild) { buildPrefsButton(); needPrefsRebuild = false; }
-  if(needSettingsRebuild) { buildSettingsPanel(); needSettingsRebuild = false; }
-  if(gazeHit && frameCount % 3 === 0) buildGazeTexture(gazeProg);
+if(!navigator.xr){
+badge.className='device-badge apple';badge.textContent='📱 No WebXR';
+vrBtn.style.display='none';cbBtn.style.display='block';inBtn.style.display='block';
+stat.textContent='WebXR not available. Using gyroscope fallback for cardboard VR.';
+return;
+}
 
-  const pose = frame.getViewerPose(xrRefSpace);
-  if(!pose) return;
+try{xrSupported=await navigator.xr.isSessionSupported('immersive-vr')}catch(e){xrSupported=false}
 
-  const glLayer = xrSession.renderState.baseLayer;
-  gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
-  gl.clearColor(0, 0, 0, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+if(xrSupported){
+badge.className='device-badge webxr';badge.textContent='🥽 WebXR Ready';
+vrBtn.disabled=false;vrBtn.textContent='🥽 Enter Immersive VR';
+cbBtn.style.display='block';inBtn.style.display='block';
+stat.textContent='WebXR immersive VR supported! Hand tracking enabled. Fist for 2s = preferences.';
+}else{
+badge.className='device-badge apple';badge.textContent='📱 No Immersive VR';
+vrBtn.style.display='none';cbBtn.style.display='block';inBtn.style.display='block';
+stat.textContent='No immersive VR headset detected. Use Cardboard mode with your phone.';
+}
+}
 
-  // Compute gaze from first view (head direction)
-  const firstView = pose.views[0];
-  const viewInv = invertMat4(firstView.transform.inverse.matrix ?
-    new Float32Array(firstView.transform.inverse.matrix) :
-    firstView.transform.matrix ? invertMat4(new Float32Array(firstView.transform.matrix)) : identityMat()
-  );
+async function startImmersiveSession(){
+if(!navigator.xr||!xrSupported)return;
+try{xrSession=await navigator.xr.requestSession('immersive-vr',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','bounded-floor']})}
+catch(e){document.getElementById('status-text').textContent='Failed: '+e.message;return}
+isImmersive=true;isCardboardMode=false;isInlineMode=false;
+hideStartScreen();
+document.getElementById('canvas-container').style.display='block';
+await setupXRSession();
+}
 
-  // Actually, XRView gives us transform (eye-to-world) and transform.inverse (world-to-eye)
-  // For gaze, we need the forward direction from the view
-  let gazeOrigin, gazeDirection;
+async function setupXRSession(){
+canvas=document.getElementById('glcanvas');
+gl=canvas.getContext('webgl',{xrCompatible:true,antialias:true,alpha:false,depth:true});
+if(!gl){alert('WebGL error');return}
+initGL();
+const layer=new XRWebGLLayer(xrSession,gl,{antialias:true,depth:true});
+await xrSession.updateRenderState({baseLayer:layer});
+try{xrRefSpace=await xrSession.requestReferenceSpace('local-floor')}
+catch(e){try{xrRefSpace=await xrSession.requestReferenceSpace('local')}catch(e2){xrRefSpace=await xrSession.requestReferenceSpace('viewer')}}
+xrSession.addEventListener('end',onSessionEnd);
+xrSession.addEventListener('selectstart',()=>{xrInputPrimary=true});
+xrSession.addEventListener('selectend',()=>{xrInputPrimary=false});
+prevTime=performance.now();xrSession.requestAnimationFrame(xrLoop);
+}
 
-  if(firstView.transform) {
-    const t = firstView.transform;
-    gazeOrigin = [t.position.x, t.position.y, t.position.z];
-    // Forward is -Z in view space
-    const ori = t.orientation;
-    // Convert quaternion to forward vector
-    const qx = ori.x, qy = ori.y, qz = ori.z, qw = ori.w;
-    // Forward vector from quaternion (negative Z)
-    gazeDirection = [
-      -2*(qx*qz + qw*qy),
-      -2*(qy*qz - qw*qx),
-      -(1 - 2*(qx*qx + qy*qy))
-    ];
-  } else {
-    gazeOrigin = [0, 1.6, 0];
-    gazeDirection = [0, 0, -1];
-  }
+function onSessionEnd(){xrSession=null;xrRefSpace=null;isImmersive=false;
+document.getElementById('start-screen').style.display='flex';document.getElementById('start-screen').style.opacity='1';
+document.getElementById('canvas-container').style.display='none';exitFullscreen()}
 
-  // Check input sources for controllers
-  xrInputPrimaryPrev = xrInputPrimary;
-  // selectstart/selectend events handle xrInputPrimary
-
-  // Check controller ray if available
-  let controllerRayUsed = false;
-  for(const source of xrSession.inputSources) {
-    if(source.targetRaySpace) {
-      const rayPose = frame.getPose(source.targetRaySpace, xrRefSpace);
-      if(rayPose) {
-        const rt = rayPose.transform;
-        gazeOrigin = [rt.position.x, rt.position.y, rt.position.z];
-        const ori = rt.orientation;
-        const qx = ori.x, qy = ori.y, qz = ori.z, qw = ori.w;
-        gazeDirection = [
-          -2*(qx*qz + qw*qy),
-          -2*(qy*qz - qw*qx),
-          -(1 - 2*(qx*qx + qy*qy))
-        ];
-        controllerRayUsed = true;
-        break;
-      }
-    }
-  }
-
-  // Gaze interaction
-  checkGaze(dt, gazeOrigin, gazeDirection);
-
-  // Render each view
-  for(const view of pose.views) {
-    const vp = glLayer.getViewport(view);
-    gl.viewport(vp.x, vp.y, vp.width, vp.height);
-
-    const projMat = new Float32Array(view.projectionMatrix);
-    let viewMat;
-
-    if(view.transform && view.transform.inverse && view.transform.inverse.matrix) {
-      viewMat = new Float32Array(view.transform.inverse.matrix);
-    } else if(view.transform && view.transform.matrix) {
-      viewMat = invertMat4(new Float32Array(view.transform.matrix));
-    } else {
-      viewMat = identityMat();
-    }
-
-    renderScene(projMat, viewMat);
-  }
-
-  xrInputPrimaryPrev = xrInputPrimary;
+function xrLoop(time,frame){
+if(!xrSession)return;xrSession.requestAnimationFrame(xrLoop);
+const dt=Math.min((time-prevTime)/1000,.1);prevTime=time;frameCount++;
+if(time-lastTexUpdateTime>500){updateCardTexture();lastTexUpdateTime=time}
+if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
+if(needPrefsRebuild){buildPrefsButton();needPrefsRebuild=false}
+if(needSettingsRebuild){buildSettingsPanel();needSettingsRebuild=false}
+if(gazeHit&&frameCount%3===0)buildGazeTexture(gazeProg);
+const pose=frame.getViewerPose(xrRefSpace);if(!pose)return;
+processHands(frame,xrRefSpace,dt);
+const gll=xrSession.renderState.baseLayer;
+gl.bindFramebuffer(gl.FRAMEBUFFER,gll.framebuffer);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+let go,gd;const fv=pose.views[0];
+if(fv.transform){const t=fv.transform;go=[t.position.x,t.position.y,t.position.z];const q=t.orientation;gd=[-2*(q.x*q.z+q.w*q.y),-2*(q.y*q.z-q.w*q.x),-(1-2*(q.x*q.x+q.y*q.y))]}
+else{go=[0,1.6,0];gd=[0,0,-1]}
+for(const s of xrSession.inputSources){if(s.targetRaySpace&&!s.hand){const rp=frame.getPose(s.targetRaySpace,xrRefSpace);
+if(rp){const rt=rp.transform;go=[rt.position.x,rt.position.y,rt.position.z];const q=rt.orientation;gd=[-2*(q.x*q.z+q.w*q.y),-2*(q.y*q.z-q.w*q.x),-(1-2*(q.x*q.x+q.y*q.y))];break}}}
+xrInputPrimaryPrev=xrInputPrimary;checkGaze(dt,go,gd);
+for(const view of pose.views){const vp=gll.getViewport(view);gl.viewport(vp.x,vp.y,vp.width,vp.height);
+const pr=new Float32Array(view.projectionMatrix);
+let vm;if(view.transform&&view.transform.inverse&&view.transform.inverse.matrix)vm=new Float32Array(view.transform.inverse.matrix);
+else if(view.transform&&view.transform.matrix)vm=inv4(new Float32Array(view.transform.matrix));else vm=I();
+renderScene(pr,vm)}
+xrInputPrimaryPrev=xrInputPrimary;
 }
 
 // ============================================================
-// FALLBACK (NON-XR) RENDER
+// CARDBOARD MODE (Apple + Android fallback)
 // ============================================================
-function initFallbackInput() {
-  // Gyro
-  window.addEventListener('devicemotion', handleGyroMotion, true);
+function startCardboardMode(){
+isCardboardMode=true;isImmersive=false;isInlineMode=false;
+hideStartScreen();
+document.getElementById('canvas-container').style.display='block';
 
-  // Touch
-  canvas.addEventListener('touchstart', e => {
-    if(e.touches.length === 1) {
-      dragging = true;
-      dragSX = e.touches[0].clientX; dragSY = e.touches[0].clientY;
-      dragYaw0 = tYaw; dragPitch0 = tPitch;
-    }
-    e.preventDefault();
-  }, {passive: false});
-  canvas.addEventListener('touchmove', e => {
-    if(dragging && !gyroReady && e.touches.length === 1) {
-      tYaw = dragYaw0 + (e.touches[0].clientX - dragSX) * 0.004;
-      tPitch = dragPitch0 - (e.touches[0].clientY - dragSY) * 0.004;
-      tPitch = Math.max(-Math.PI*0.48, Math.min(Math.PI*0.48, tPitch));
-    }
-    e.preventDefault();
-  }, {passive: false});
-  canvas.addEventListener('touchend', () => { dragging = false; });
-  canvas.addEventListener('mousedown', e => { dragging = true; dragSX = e.clientX; dragSY = e.clientY; dragYaw0 = tYaw; dragPitch0 = tPitch; });
-  window.addEventListener('mousemove', e => {
-    if(dragging && !gyroReady) {
-      tYaw = dragYaw0 + (e.clientX - dragSX) * 0.004;
-      tPitch = dragPitch0 - (e.clientY - dragSY) * 0.004;
-      tPitch = Math.max(-Math.PI*0.48, Math.min(Math.PI*0.48, tPitch));
-    }
-  });
-  window.addEventListener('mouseup', () => { dragging = false; });
+// Show wake lock overlay for user gesture
+const wl=document.getElementById('wl-overlay');
+wl.style.display='flex';
+wl.addEventListener('click',()=>{
+wl.style.display='none';
+goFullscreen();
+initDeviceOrientation();
+// Try wake lock
+if(navigator.wakeLock){navigator.wakeLock.request('screen').catch(()=>{})}
+},{once:true});
 
-  // Click for gaze activation
-  canvas.addEventListener('click', () => {
-    if(typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-      DeviceMotionEvent.requestPermission().then(s => {
-        if(s === 'granted') window.addEventListener('devicemotion', handleGyroMotion, true);
-      }).catch(() => {});
-    }
-    try { document.documentElement.requestFullscreen().catch(() => {}); } catch(e) {}
-  });
-
-  window.addEventListener('resize', () => {
-    if(canvas) {
-      canvas.width = window.innerWidth * devicePixelRatio;
-      canvas.height = window.innerHeight * devicePixelRatio;
-    }
-  });
+canvas=document.getElementById('glcanvas');
+canvas.width=window.innerWidth*devicePixelRatio;
+canvas.height=window.innerHeight*devicePixelRatio;
+gl=canvas.getContext('webgl',{antialias:true,alpha:false,depth:true,powerPreference:'high-performance'});
+if(!gl){alert('WebGL error');return}
+initGL();initCardboardInput();
+prevTime=performance.now();requestAnimationFrame(cardboardLoop);
 }
 
-function getLandscapeFlip() {
-  let angle = 0;
-  if(screen.orientation && typeof screen.orientation.angle === 'number') angle = screen.orientation.angle;
-  else if(typeof window.orientation === 'number') angle = window.orientation;
-  return (angle === 270 || angle === -90) ? -1 : 1;
+function initCardboardInput(){
+canvas.addEventListener('touchstart',e=>{
+if(e.touches.length===1){dragging=true;dragSX=e.touches[0].clientX;dragSY=e.touches[0].clientY;dragYaw0=tYaw;dragPitch0=tPitch}
+e.preventDefault()},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+if(dragging&&!gyroReady&&e.touches.length===1){tYaw=dragYaw0+(e.touches[0].clientX-dragSX)*.004;tPitch=dragPitch0-(e.touches[0].clientY-dragSY)*.004;tPitch=clamp(tPitch,-Math.PI*.48,Math.PI*.48)}
+e.preventDefault()},{passive:false});
+canvas.addEventListener('touchend',e=>{
+dragging=false;
+// Single tap = gaze click
+if(!gyroReady)return;
+xrInputPrimary=true;setTimeout(()=>{xrInputPrimary=false},100);
+});
+canvas.addEventListener('mousedown',e=>{dragging=true;dragSX=e.clientX;dragSY=e.clientY;dragYaw0=tYaw;dragPitch0=tPitch});
+window.addEventListener('mousemove',e=>{if(dragging&&!gyroReady){tYaw=dragYaw0+(e.clientX-dragSX)*.004;tPitch=dragPitch0-(e.clientY-dragSY)*.004;tPitch=clamp(tPitch,-Math.PI*.48,Math.PI*.48)}});
+window.addEventListener('mouseup',()=>{dragging=false});
+window.addEventListener('resize',()=>{if(canvas){canvas.width=window.innerWidth*devicePixelRatio;canvas.height=window.innerHeight*devicePixelRatio}});
+const fsChange=()=>{if(!isFullscreen()&&isCardboardMode){/* could show re-enter prompt */}};
+document.addEventListener('fullscreenchange',fsChange);document.addEventListener('webkitfullscreenchange',fsChange);
 }
 
-function handleGyroMotion(e) {
-  const rr = e.rotationRate;
-  if(!rr || rr.alpha === null) return;
-  const now = performance.now();
-  if(lastGyroTime === 0) { lastGyroTime = now; gyroReady = true; return; }
-  const dtS = (now - lastGyroTime) / 1000;
-  lastGyroTime = now;
-  if(dtS <= 0 || dtS > 0.2) return;
-  const D2R = Math.PI / 180;
-  const flip = getLandscapeFlip();
-  tYaw += rr.beta * D2R * dtS * flip;
-  tPitch += rr.gamma * D2R * dtS * flip;
-  tPitch = Math.max(-Math.PI*0.48, Math.min(Math.PI*0.48, tPitch));
-  gyroReady = true;
+function cardboardLoop(time){
+requestAnimationFrame(cardboardLoop);
+const dt=Math.min((time-prevTime)/1000,.1);prevTime=time;frameCount++;
+if(time-lastTexUpdateTime>500){updateCardTexture();lastTexUpdateTime=time}
+if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
+if(needPrefsRebuild){buildPrefsButton();needPrefsRebuild=false}
+if(needSettingsRebuild){buildSettingsPanel();needSettingsRebuild=false}
+if(gazeHit&&frameCount%3===0)buildGazeTexture(gazeProg);
+const cw=Math.floor(canvas.clientWidth*devicePixelRatio);
+const ch=Math.floor(canvas.clientHeight*devicePixelRatio);
+if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
+
+// Build view matrix from gyroscope or touch
+let viewMat;
+if(gyroReady&&useDeviceOrientation){
+viewMat=getOrientationViewMatrix();
+}else{
+smoothPitch+=(tPitch-smoothPitch)*.3;smoothYaw+=(tYaw-smoothYaw)*.3;
+viewMat=I();viewMat=rXM(viewMat,smoothPitch);viewMat=rYM(viewMat,smoothYaw);
 }
 
-function fallbackRenderLoop(time) {
-  requestAnimationFrame(fallbackRenderLoop);
+// Gaze direction from view
+const iv=inv4(viewMat);
+const go=[iv[12],iv[13],iv[14]];
+const gd=[-iv[8],-iv[9],-iv[10]];
 
-  const dt = Math.min((time - prevTime) / 1000, 0.1);
-  prevTime = time;
-  frameCount++;
+xrInputPrimaryPrev=xrInputPrimary;
+checkGaze(dt,go,gd);
 
-  // Smooth camera
-  inlinePitch += (tPitch - inlinePitch) * 0.3;
-  inlineYaw += (tYaw - inlineYaw) * 0.3;
+const fovRad=vrSettings.fov*Math.PI/180;
+const ipdM=vrSettings.ipd/1000;
+const hw=Math.floor(canvas.width/2),asp=hw/canvas.height;
+const proj=persp(fovRad,asp,.1,100);
 
-  // Update textures
-  if(time - lastTexUpdateTime > 500) { updateCardTexture(); lastTexUpdateTime = time; }
-  if(needAppRebuild) { buildAppCardTextures(); needAppRebuild = false; }
-  if(needPrefsRebuild) { buildPrefsButton(); needPrefsRebuild = false; }
-  if(needSettingsRebuild) { buildSettingsPanel(); needSettingsRebuild = false; }
-  if(gazeHit && frameCount % 3 === 0) buildGazeTexture(gazeProg);
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
-  // Canvas resize
-  const cw = Math.floor(canvas.clientWidth * devicePixelRatio);
-  const ch = Math.floor(canvas.clientHeight * devicePixelRatio);
-  if(canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+// Left eye
+gl.viewport(0,0,hw,canvas.height);
+renderScene(proj,mul(viewMat,trM(I(),ipdM*.5,0,0)));
+// Right eye
+gl.viewport(hw,0,hw,canvas.height);
+renderScene(proj,mul(viewMat,trM(I(),-ipdM*.5,0,0)));
 
-  // Build view
-  let viewMat = identityMat();
-  viewMat = rotXMat(viewMat, inlinePitch);
-  viewMat = rotYMat(viewMat, inlineYaw);
+// Divider line
+gl.disable(gl.DEPTH_TEST);gl.enable(gl.SCISSOR_TEST);
+gl.scissor(hw-1,0,2,canvas.height);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
+gl.disable(gl.SCISSOR_TEST);gl.enable(gl.DEPTH_TEST);
 
-  // Gaze direction
-  const gazeOrigin = [0, 0, 0];
-  const gazeDirection = [
-    -Math.sin(inlineYaw) * Math.cos(inlinePitch),
-    Math.sin(inlinePitch),
-    -Math.cos(inlineYaw) * Math.cos(inlinePitch)
-  ];
+xrInputPrimaryPrev=xrInputPrimary;
+}
 
-  xrInputPrimaryPrev = xrInputPrimary;
-  checkGaze(dt, gazeOrigin, gazeDirection);
+// ============================================================
+// INLINE (Flat) MODE
+// ============================================================
+function startInlineMode(){
+isInlineMode=true;isCardboardMode=false;isImmersive=false;
+hideStartScreen();
+document.getElementById('canvas-container').style.display='block';
+goFullscreen();
+canvas=document.getElementById('glcanvas');
+canvas.width=window.innerWidth*devicePixelRatio;
+canvas.height=window.innerHeight*devicePixelRatio;
+gl=canvas.getContext('webgl',{antialias:true,alpha:false,depth:true});
+if(!gl){alert('WebGL error');return}
+initGL();
+initDeviceOrientation();
+initCardboardInput();
+prevTime=performance.now();requestAnimationFrame(inlineLoop);
+}
 
-  // Stereo rendering
-  const fovRad = vrSettings.fov * Math.PI / 180;
-  const ipdM = vrSettings.ipd / 1000;
-  const hw = Math.floor(canvas.width / 2);
-  const asp = hw / canvas.height;
-  const projMat = perspectiveMat(fovRad, asp, 0.1, 100);
+function inlineLoop(time){
+requestAnimationFrame(inlineLoop);
+const dt=Math.min((time-prevTime)/1000,.1);prevTime=time;frameCount++;
+if(time-lastTexUpdateTime>500){updateCardTexture();lastTexUpdateTime=time}
+if(needAppRebuild){buildAppCardTextures();needAppRebuild=false}
+if(needPrefsRebuild){buildPrefsButton();needPrefsRebuild=false}
+if(needSettingsRebuild){buildSettingsPanel();needSettingsRebuild=false}
+if(gazeHit&&frameCount%3===0)buildGazeTexture(gazeProg);
+const cw=Math.floor(canvas.clientWidth*devicePixelRatio);
+const ch=Math.floor(canvas.clientHeight*devicePixelRatio);
+if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
 
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.clearColor(0, 0, 0, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+let viewMat;
+if(gyroReady&&useDeviceOrientation){viewMat=getOrientationViewMatrix()}
+else{smoothPitch+=(tPitch-smoothPitch)*.3;smoothYaw+=(tYaw-smoothYaw)*.3;viewMat=I();viewMat=rXM(viewMat,smoothPitch);viewMat=rYM(viewMat,smoothYaw)}
 
-  // Left eye
-  gl.viewport(0, 0, hw, canvas.height);
-  const viewL = mulMat(viewMat, translateMat(identityMat(), ipdM*0.5, 0, 0));
-  renderScene(projMat, viewL);
+const iv=inv4(viewMat);const go=[iv[12],iv[13],iv[14]],gd=[-iv[8],-iv[9],-iv[10]];
+xrInputPrimaryPrev=xrInputPrimary;checkGaze(dt,go,gd);
 
-  // Right eye
-  gl.viewport(hw, 0, hw, canvas.height);
-  const viewR = mulMat(viewMat, translateMat(identityMat(), -ipdM*0.5, 0, 0));
-  renderScene(projMat, viewR);
+const fovRad=vrSettings.fov*Math.PI/180;
+const asp=canvas.width/canvas.height;
+const proj=persp(fovRad,asp,.1,100);
+
+gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+gl.viewport(0,0,canvas.width,canvas.height);
+renderScene(proj,viewMat);
+xrInputPrimaryPrev=xrInputPrimary;
+}
+
+// ============================================================
+// ORIENTATION HANDLING
+// ============================================================
+function checkOrientation(){
+const rp=document.getElementById('rotate-prompt');
+if(isCardboardMode||isImmersive){
+if(window.innerWidth<window.innerHeight){rp.style.display='flex'}else{rp.style.display='none'}
+}else{rp.style.display='none'}
+}
+window.addEventListener('resize',checkOrientation);
+window.addEventListener('orientationchange',()=>setTimeout(checkOrientation,300));
+
+function hideStartScreen(){
+const ss=document.getElementById('start-screen');ss.style.opacity='0';
+setTimeout(()=>{ss.style.display='none'},800);
 }
 
 // ============================================================
 // INIT
 // ============================================================
-async function init() {
-  loadAppIcons();
+async function init(){
+loadAppIcons();
+await loadPanoImage();
+await checkXRSupport();
 
-  // Load panorama
-  await loadPanoImage();
-
-  // Check XR support
-  await checkXRSupport();
-
-  // Wire buttons
-  document.getElementById('enter-vr-btn').addEventListener('click', startImmersiveSession);
-  document.getElementById('enter-inline-btn').addEventListener('click', startInlineSession);
+document.getElementById('enter-vr-btn').addEventListener('click',startImmersiveSession);
+document.getElementById('enter-cardboard-btn').addEventListener('click',startCardboardMode);
+document.getElementById('enter-inline-btn').addEventListener('click',startInlineMode);
 }
 
-window.addEventListener('load', init);
+window.addEventListener('load',init);
 </script>
 </body>
 </html>
