@@ -68,27 +68,20 @@ let gl,canvas;
 let panoTexture=null;
 let loadDone=false,loadStarted=false;
 
+// Current smoothed angles (what we actually render)
 let pitch=0,yaw=0,roll=0;
+// Target angles (what gyro drives)
 let tPitch=0,tYaw=0,tRoll=0;
+
 let gyroReady=false;
 let lastGyroTime=0;
 
-/* Detect landscape orientation type */
-let landscapeType='primary'; // 'primary' = CCW rotation, 'secondary' = CW rotation
+// Gyro calibration offset — captured on first stable reading
+let gyroPitchOffset=null;
+let gyroYawOffset=null; // not really needed for yaw since we integrate, but for absolute if needed
 
-function detectLandscapeType(){
-    const orient=screen.orientation||screen.mozOrientation||screen.msOrientation;
-    if(orient&&orient.type){
-        if(orient.type.indexOf('secondary')!==-1) landscapeType='secondary';
-        else landscapeType='primary';
-    }else{
-        // fallback: use window.orientation
-        if(typeof window.orientation!=='undefined'){
-            if(window.orientation===90) landscapeType='primary';
-            else if(window.orientation===-90) landscapeType='secondary';
-        }
-    }
-}
+// We use INTEGRATION of rotationRate (deg/s) for yaw, pitch, roll
+// This avoids the axis confusion of absolute Euler angles (alpha/beta/gamma)
 
 let dragging=false,dragSX=0,dragSY=0,dragYaw0=0,dragPitch0=0;
 let gazeHit=null,gazeTimer=0,gazeProg=0;
@@ -132,7 +125,6 @@ let needPrefsRebuild=false;
 function lockLS(){try{screen.orientation.lock('landscape-primary').catch(()=>{})}catch(e){}}
 function isLS(){return innerWidth>innerHeight}
 function checkOrient(){
-    detectLandscapeType();
     const el=document.getElementById('rotate-screen');
     if(isLS()){el.style.opacity='0';setTimeout(()=>{el.style.display='none';beginLoad()},550)}
     else{el.style.display='flex';el.style.opacity='1'}
@@ -277,71 +269,115 @@ function updateHandState(){
     pinchClickRight=rightPinch&&!prevRightPinch;
 }
 
-/* ═══════════════════════════════════════════
-   PURE GYROSCOPE — Integration of angular velocity
+/* ═══════════════════════════════════════════════════════════════
+   GYROSCOPE FIX — Using rotationRate integration (deg/s)
    
-   In LANDSCAPE-PRIMARY the phone is rotated 90° CCW from portrait.
-   The device axes in landscape are remapped:
+   The phone is in LANDSCAPE-PRIMARY (rotated 90° CCW from portrait).
+   The device's physical orientation in your hand:
    
-   Device physical axes (portrait):
-     X = right, Y = up, Z = out of screen
+     Portrait reference:
+       Device X = points right (towards volume buttons side)
+       Device Y = points up (towards front camera / top speaker)
+       Device Z = points out of screen toward your face
    
-   rotationRate gives angular velocity around device axes:
-     alpha = around Z (yaw in portrait)
-     beta  = around X (pitch in portrait)  
-     gamma = around Y (roll in portrait)
+     In landscape-primary, you hold the phone sideways so:
+       The "right" side of the screen = device's TOP (Y direction)
+       The "up" side of the screen   = device's LEFT (-X direction)
+       Screen normal (toward eyes)   = device Z (same)
    
-   In landscape-primary (device rotated 90° CCW):
-     Screen horizontal = device Y axis
-     Screen vertical   = device X axis (inverted)
-     
-   So for VR in landscape:
-     Looking left/right (yaw)  = rotation around device X = beta
-     Looking up/down (pitch)   = rotation around device Y = gamma  
-     Head tilt (roll)          = rotation around device Z = alpha
+   rotationRate gives angular velocity (deg/s) around device axes:
+       alpha = around Z axis  (like compass spin — spinning on table)
+       beta  = around X axis  (tipping forward/backward in portrait = 
+                               tipping sideways in landscape)
+       gamma = around Y axis  (tipping left/right in portrait = 
+                               tipping forward/backward in landscape)
    
-   Also: "move left → scene moves right" means we NEGATE yaw.
-   ═══════════════════════════════════════════ */
+   In landscape-primary, what the USER does physically:
+   
+   USER ACTION → DEVICE AXIS → VR EFFECT
+   ─────────────────────────────────────────────────────
+   Tilt screen UP (power-btn side goes up, other side down)
+     = Rotate around SCREEN-X (landscape horizontal axis)
+     = In device coords: -gamma (rotation around device Y, negated)
+     → Should move view UP (positive pitch in VR)
+   
+   Tilt screen DOWN (power-btn side goes down)
+     = +gamma rotation around device Y
+     → Should move view DOWN (negative pitch)
+     So: VR_pitch_rate = -gamma_rate
+   
+   Pan LEFT (charger port side goes toward you, top away)  
+     = Rotate around SCREEN-Y (landscape vertical axis)
+     = In device coords: +beta (rotation around device X)
+     → Should pan view LEFT (negative yaw, scene moves right)
+     So: VR_yaw_rate = -beta_rate
+   
+   Head tilt / Roll (tilt like steering a car)
+     = Rotate around SCREEN-Z (the axis going through screen)
+     = In device coords: alpha (rotation around device Z)
+     → Roll in VR
+     So: VR_roll_rate = alpha_rate (damped)
+   
+   Note: Signs may need flip for landscape-secondary.
+   We detect orientation type and flip accordingly.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Detect if landscape is primary (phone rotated CCW, home/charger on right)
+// or secondary (phone rotated CW, home/charger on left)
+function getLandscapeFlip(){
+    // screen.orientation.angle: 90 = primary (CCW rotation), 270 or -90 = secondary (CW)
+    let angle=0;
+    if(screen.orientation&&typeof screen.orientation.angle==='number'){
+        angle=screen.orientation.angle;
+    }else if(typeof window.orientation==='number'){
+        angle=window.orientation;
+    }
+    // angle=90: landscape-primary, angle=270 or -90: landscape-secondary
+    // For secondary, the up/down and left/right are both flipped
+    if(angle===270||angle===-90)return -1;
+    return 1; // primary
+}
 
 function handleGyroMotion(e){
     const rr=e.rotationRate;
-    if(!rr||rr.alpha===null)return;
-    
+    if(!rr||rr.alpha===null||rr.beta===null||rr.gamma===null)return;
+
     const now=performance.now();
-    if(lastGyroTime===0){lastGyroTime=now;gyroReady=true;return}
-    
+    if(lastGyroTime===0){lastGyroTime=now;gyroReady=true;return;}
+
     const dtS=(now-lastGyroTime)/1000;
     lastGyroTime=now;
-    
-    if(dtS>0.2)return;
-    
-    const D=Math.PI/180;
-    
-    // Raw gyro in deg/s → rad/s
-    const gyroAlpha=rr.alpha*D; // around Z
-    const gyroBeta=rr.beta*D;   // around X
-    const gyroGamma=rr.gamma*D; // around Y
-    
-    // Determine sign flip based on landscape orientation
-    // landscape-primary: phone rotated CCW (home button on right)
-    // landscape-secondary: phone rotated CW (home button on left)
-    detectLandscapeType();
-    const flip=(landscapeType==='secondary')?-1:1;
-    
-    // In landscape-primary (CCW rotation from portrait):
-    //   Yaw (looking left/right) = device beta (X-axis rotation)
-    //     Negated so: move phone left → scene moves right
-    //   Pitch (looking up/down) = device gamma (Y-axis rotation)
-    //   Roll (head tilt) = device alpha (Z-axis rotation)
-    
-    tYaw   -= gyroBeta * dtS * flip;    // negated for correct direction
-    tPitch += gyroGamma * dtS * flip;   // up/down
-    tRoll  += gyroAlpha * dtS * 0.3 * flip; // head tilt, damped
-    
-    // Clamp
-    tPitch=Math.max(-Math.PI*0.45,Math.min(Math.PI*0.45,tPitch));
-    tRoll=Math.max(-0.5,Math.min(0.5,tRoll));
-    
+
+    if(dtS<=0||dtS>0.2)return;
+
+    const D2R=Math.PI/180;
+
+    // rotationRate is in deg/s — convert to rad/s
+    const rAlpha=rr.alpha*D2R; // around device Z
+    const rBeta =rr.beta *D2R; // around device X
+    const rGamma=rr.gamma*D2R; // around device Y
+
+    // Flip sign based on landscape orientation type
+    const flip=getLandscapeFlip();
+
+    // Apply the correct mapping:
+    // Yaw   (look left/right): driven by beta  (device X rotation)
+    //   Negate: rotating device X positively = panning view left = negative yaw
+    tYaw   += (-rBeta  * dtS * flip);
+
+    // Pitch (look up/down):   driven by gamma (device Y rotation)
+    //   Negate: rotating device Y positively = tilting screen down = negative pitch  
+    tPitch += (-rGamma * dtS * flip);
+
+    // Roll  (head tilt):      driven by alpha (device Z rotation)
+    //   Damped significantly — small effect
+    tRoll  += (rAlpha  * dtS * flip * 0.4);
+
+    // Clamp pitch so you can't look past straight up/down
+    tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+    // Clamp roll to gentle tilt range
+    tRoll =Math.max(-0.6,Math.min(0.6,tRoll));
+
     gyroReady=true;
 }
 
@@ -358,7 +394,7 @@ function reqGyroPermission(){
 }
 
 function initVR(img){
-    lockLS();detectLandscapeType();
+    lockLS();
     document.getElementById('vr-wrap').style.display='block';
     canvas=document.getElementById('glc');
     resizeCanvas();
@@ -409,23 +445,43 @@ function rY(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[2]=-s;r[8]=s;r
 function rZ(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[1]=s;r[4]=-s;r[5]=c;return mul(m,r)}
 function tr(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mul(m,t)}
 function sc(m,x,y,z){const s=I();s[0]=x;s[5]=y;s[10]=z;return mul(m,s)}
-function viewMatrix(){let m=I();m=rZ(m,roll);m=rX(m,pitch);m=rY(m,yaw);return m}
+
+// View matrix: apply rotations in correct order for VR
+// Order: Roll → Pitch → Yaw (standard FPS camera)
+function viewMatrix(){
+    let m=I();
+    m=rZ(m,roll);   // roll (tilt)
+    m=rX(m,pitch);  // pitch (up/down)
+    m=rY(m,yaw);    // yaw (left/right)
+    return m;
+}
 
 function initTouch(){
-    canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging=true;dragSX=e.touches[0].clientX;dragSY=e.touches[0].clientY;dragYaw0=tYaw;dragPitch0=tPitch}e.preventDefault()},{passive:false});
-    canvas.addEventListener('touchmove',e=>{if(dragging&&!gyroReady&&e.touches.length===1){
-        // Touch drag: move left → scene moves right (negate X)
-        tYaw=dragYaw0-(e.touches[0].clientX-dragSX)*0.004;
-        tPitch=dragPitch0+(e.touches[0].clientY-dragSY)*0.004;
-        tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
-    }e.preventDefault()},{passive:false});
+    canvas.addEventListener('touchstart',e=>{
+        if(e.touches.length===1){
+            dragging=true;
+            dragSX=e.touches[0].clientX;dragSY=e.touches[0].clientY;
+            dragYaw0=tYaw;dragPitch0=tPitch;
+        }
+        e.preventDefault();
+    },{passive:false});
+    canvas.addEventListener('touchmove',e=>{
+        if(dragging&&!gyroReady&&e.touches.length===1){
+            tYaw  =dragYaw0  -(e.touches[0].clientX-dragSX)*0.004;
+            tPitch=dragPitch0+(e.touches[0].clientY-dragSY)*0.004;
+            tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+        }
+        e.preventDefault();
+    },{passive:false});
     canvas.addEventListener('touchend',()=>{dragging=false});
     canvas.addEventListener('mousedown',e=>{dragging=true;dragSX=e.clientX;dragSY=e.clientY;dragYaw0=tYaw;dragPitch0=tPitch});
-    window.addEventListener('mousemove',e=>{if(dragging&&!gyroReady){
-        tYaw=dragYaw0-(e.clientX-dragSX)*0.004;
-        tPitch=dragPitch0+(e.clientY-dragSY)*0.004;
-        tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
-    }});
+    window.addEventListener('mousemove',e=>{
+        if(dragging&&!gyroReady){
+            tYaw  =dragYaw0  -(e.clientX-dragSX)*0.004;
+            tPitch=dragPitch0+(e.clientY-dragSY)*0.004;
+            tPitch=Math.max(-Math.PI*0.48,Math.min(Math.PI*0.48,tPitch));
+        }
+    });
     window.addEventListener('mouseup',()=>{dragging=false});
 }
 
@@ -669,7 +725,14 @@ function getSettingsButtonPositions(){
     return results;
 }
 
-function gazeDir(){return[-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch)]}
+function gazeDir(){
+    // Direction the camera is looking in world space
+    return[
+        -Math.sin(yaw)*Math.cos(pitch),
+         Math.sin(pitch),
+        -Math.cos(yaw)*Math.cos(pitch)
+    ];
+}
 
 function hitQuad(dir,pos,w,h){
     if(Math.abs(dir[2])<0.001)return false;
@@ -856,9 +919,11 @@ function mainLoop(now){
         if(cameraAppOpen)updateCameraTexture();
         lastTexTime=now;
     }
+    // Smooth camera — lerp current angles toward targets
     pitch+=(tPitch-pitch)*CAM_SMOOTH;
-    yaw+=(tYaw-yaw)*CAM_SMOOTH;
-    roll+=(tRoll-roll)*0.05;
+    yaw  +=(tYaw  -yaw  )*CAM_SMOOTH;
+    roll +=(tRoll -roll )*0.05;
+
     updateHandState();
     buildCombinedHandTexture();
     checkGaze(dt);
