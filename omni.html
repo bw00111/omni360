@@ -8,13 +8,13 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:system-ui,-apple-system,sans-serif;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none}
-
-#session-badge{position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.7);border:1px solid rgba(0,180,255,.3);border-radius:8px;padding:4px 12px;font-size:11px;display:flex;align-items:center;gap:6px;pointer-events:none}
+#session-badge{position:fixed;top:8px;left:8px;z-index:99999;background:rgba(0,0,0,.75);border:1px solid rgba(0,180,255,.3);border-radius:8px;padding:5px 14px;font-size:11px;display:flex;align-items:center;gap:6px;pointer-events:none}
 #session-badge .sid{color:#00b4ff;font-weight:700;font-family:monospace;letter-spacing:1px}
 #session-badge .status{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:600}
 #session-badge .status.pending{background:rgba(255,180,0,.2);color:#ffb400}
 #session-badge .status.active{background:rgba(0,255,100,.2);color:#00ff64}
-
+#session-badge .status.streaming{background:rgba(255,50,50,.2);color:#ff4444;animation:blink2 1s infinite}
+@keyframes blink2{0%,100%{opacity:1}50%{opacity:.4}}
 #loading-screen{position:fixed;inset:0;z-index:10000;background:linear-gradient(140deg,#030312,#0a0a3a,#030312);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
 .loader-ring{width:80px;height:80px;border-radius:50%;border:3px solid rgba(255,255,255,.08);border-top-color:#00b4ff;border-right-color:#8b5cf6;animation:spin 1s linear infinite;margin-bottom:24px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -23,7 +23,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:sys
 .load-bar-bg{width:220px;height:3px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
 .load-bar-fg{height:100%;width:0;background:linear-gradient(90deg,#00b4ff,#8b5cf6);border-radius:3px;transition:width .2s}
 .load-pct{font-size:10px;opacity:.3;margin-top:8px}
-
 #scanner-screen{position:fixed;inset:0;z-index:9000;background:#000;display:none;flex-direction:column;align-items:center;justify-content:center}
 #scanner-video{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
 .scanner-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2;background:radial-gradient(circle,transparent 30%,rgba(0,0,0,.7) 70%)}
@@ -38,19 +37,18 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:sys
 .scan-title{font-size:16px;font-weight:700;margin-bottom:16px;text-shadow:0 2px 8px rgba(0,0,0,.8)}
 .scan-hint{font-size:11px;opacity:.45;margin-top:16px;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 .scan-manual{margin-top:16px;padding:9px 20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:8px;font-size:11px;cursor:pointer;color:#fff}
-
 #manual-input{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px}
 #manual-input input{padding:12px 18px;font-size:15px;background:rgba(255,255,255,.06);border:2px solid rgba(0,180,255,.35);border-radius:10px;color:#fff;width:260px;text-align:center;outline:none}
 #manual-input input:focus{border-color:rgba(0,180,255,.8)}
 #manual-input button{padding:10px 36px;font-size:13px;font-weight:600;background:linear-gradient(135deg,rgba(0,100,255,.4),rgba(100,50,255,.4));border:2px solid rgba(0,180,255,.4);border-radius:10px;color:#fff;cursor:pointer}
 #manual-input .back-btn{background:none;border:1px solid rgba(255,255,255,.15);font-size:11px;padding:7px 18px;margin-top:6px}
-
 #vr-container{position:fixed;inset:0;z-index:100;display:none;background:#000}
 #vr-container canvas{width:100%;height:100%;display:block}
 #enter-vr{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:opacity .4s}
 #enter-vr .ev-t{font-size:18px;font-weight:700;margin-bottom:5px}
 #enter-vr .ev-s{font-size:10px;opacity:.35}
-#cam-preview{position:fixed;top:0;left:0;width:1px;height:1px;opacity:.001;z-index:-1}
+#yt-container{position:fixed;bottom:0;right:0;width:320px;height:180px;z-index:-1;opacity:0.001;pointer-events:none}
+#yt-container iframe{width:100%;height:100%;border:none}
 </style>
 </head>
 <body>
@@ -97,16 +95,104 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:sys
 </div>
 
 <div id="vr-container"><canvas id="vr-canvas"></canvas></div>
-<video id="cam-preview" playsinline autoplay muted></video>
+<div id="yt-container"></div>
 
-<script>
-"use strict";
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+import{getDatabase,ref,set,update,push,serverTimestamp}from"https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-// Session ID
+const firebaseConfig={
+apiKey:"AIzaSyDY8-iGfATNeoZ7OxdnfVZ634fiqZdUrWs",
+authDomain:"uukr-d4caa.firebaseapp.com",
+databaseURL:"https://uukr-d4caa-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId:"uukr-d4caa",
+storageBucket:"uukr-d4caa.firebasestorage.app",
+messagingSenderId:"1032747716244",
+appId:"1:1032747716244:web:1bd0a19c0ebc0ea879ee81",
+measurementId:"G-E740HW5LCS"
+};
+
+const fbApp=initializeApp(firebaseConfig);
+const db=getDatabase(fbApp);
+
+// Session
 const SESSION_ID=(''+(100000+Math.floor(Math.random()*900000)));
 document.getElementById('sess-id').textContent=SESSION_ID;
 
-// Assets
+const sessRef=ref(db,'sessions/'+SESSION_ID);
+const feedRef=ref(db,'sessions/'+SESSION_ID+'/liveFeed');
+
+// Save session creation
+set(sessRef,{
+sessionId:SESSION_ID,
+createdAt:new Date().toISOString(),
+createdTimestamp:Date.now(),
+status:'pending',
+currentLesson:null,
+lessonHistory:[],
+device:navigator.userAgent.substring(0,100),
+screenWidth:screen.width,
+screenHeight:screen.height
+});
+
+function updateSessionStatus(status,lessonData){
+update(sessRef,{status:status,lastUpdated:Date.now(),...(lessonData||{})});
+}
+
+function updateCurrentLesson(lesson){
+update(sessRef,{
+currentLesson:lesson?{code:lesson.code,name:lesson.name,type:lesson.type,startedAt:Date.now()}:null,
+lastUpdated:Date.now()
+});
+}
+
+function addLessonHistory(code,name){
+const histRef=ref(db,'sessions/'+SESSION_ID+'/lessonHistory');
+push(histRef,{code,name,timestamp:Date.now()});
+}
+
+// Live feed streaming
+let streamInterval=null;
+let frameCount=0;
+let streamCanvas=null,streamCtx=null;
+
+function startStreaming(){
+if(streamInterval)return;
+streamCanvas=document.createElement('canvas');
+streamCanvas.width=320;streamCanvas.height=180;
+streamCtx=streamCanvas.getContext('2d',{willReadFrequently:true});
+
+document.getElementById('sess-status').textContent='● LIVE';
+document.getElementById('sess-status').className='status streaming';
+updateSessionStatus('streaming');
+
+streamInterval=setInterval(()=>{
+const srcCanvas=document.getElementById('vr-canvas');
+if(!srcCanvas)return;
+try{
+streamCtx.drawImage(srcCanvas,0,0,320,180);
+const dataUrl=streamCanvas.toDataURL('image/jpeg',0.35);
+frameCount++;
+update(feedRef,{
+frame:dataUrl,
+frameNumber:frameCount,
+timestamp:Date.now(),
+resolution:'320x180',
+lesson:currentLesson?currentLesson.name:'none'
+});
+}catch(e){}
+},33); // ~30fps
+}
+
+function stopStreaming(){
+if(streamInterval){clearInterval(streamInterval);streamInterval=null}
+frameCount=0;
+document.getElementById('sess-status').textContent='ACTIVE';
+document.getElementById('sess-status').className='status active';
+updateSessionStatus('active');
+}
+
+// ═══ ASSETS ═══
 const ASSETS={
 gwc1:{url:'https://i.ibb.co/k2QRKbNt/Greatwallchina-2.jpg',type:'image',img:null},
 gwc2:{url:'https://i.ibb.co/sJJc0gjP/Greatwallchina-1.jpg',type:'image',img:null},
@@ -114,30 +200,28 @@ gwc3:{url:'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/gre
 gwc4:{url:'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/greatwall-4.jpg',type:'image',img:null},
 gwc5:{url:'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/greatwall-5.jpg',type:'image',img:null},
 etTex:{url:'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/eiffeltower.jpg',type:'image',img:null},
-etObj:{url:'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/10067_Eiffel_Tower_v1_max2010_it1.obj',type:'obj',data:null},
 colosseum:{url:'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/colloseum.jpg',type:'image',img:null},
 };
 
 const LESSONS={
-'ET-G-531857':{name:'Eiffel Tower',type:'eiffel'},
-'GWC-G-347028':{name:'Great Wall of China',type:'gwc'},
-'C-G-407150':{name:'Colosseum',type:'colosseum'},
+'ET-G-531857':{name:'Eiffel Tower',type:'eiffel',code:'ET-G-531857'},
+'GWC-G-347028':{name:'Great Wall of China',type:'gwc',code:'GWC-G-347028'},
+'C-G-407150':{name:'Colosseum',type:'colosseum',code:'C-G-407150'},
 };
 
 const GWC_KEYS=['gwc1','gwc2','gwc3','gwc4','gwc5'];
-const COLOSSEUM_VIDEO='https://www.youtube.com/embed/bmvxRMYxlhE?autoplay=1&mute=1&controls=0&loop=1&playlist=bmvxRMYxlhE&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&fs=0';
+const YT_VIDEO_ID='bmvxRMYxlhE';
 
 let currentLesson=null,gwcPage=0;
 let gl,canvas;
 let panoTextures=[],currentPanoIdx=0;
-let fadeAlpha=1,fading=false,fadeDir=0,fadeTarget=0;
-let progPano,progUI,progModel;
+let fadeAlpha=1,fading=false,fadeDir=0;
+let progPano,progUI;
 let sphVBO,sphIBO,sphCnt,quadVBO;
-let navTex=null,crossTex=null,gazeTex=null,closeTex=null,arBtnTex=null;
+let navTex=null,crossTex=null,gazeTex=null,closeTex=null,vidPanelTex=null;
 let navHover=false,navGazeT=0,navGazeP=0;
 let closeHover=false,closeGazeT=0,closeGazeP=0;
-let arBtnHover=false,arBtnGazeT=0,arBtnGazeP=0;
-const GAZE_TIME=1.8;
+const GAZE_TIME=1.5;
 let gzH2=null;
 
 let tPitch=0,tYaw=0,sPitch=0,sYaw=0;
@@ -145,19 +229,13 @@ let gyOK2=false,useOri2=false;
 let curQ2=[0,0,0,1],targetQ2=[0,0,0,1],refQ2=null;
 let dragging2=false,dsx2=0,dsy2=0,dy02=0,dp02=0;
 let tapTrigger=false;
-let prevTime=0;
+let prevTime=0,frc=0;
 
-let etModelVBO=null,etModelCnt=0,etTexGl=null,etRotation=0;
 let vrFov=90,vrIpd=64;
 
-// AR mode
-let arMode=false,arCamOK=false,arCamVid=null,arCamTex=null;
-
-// Video panel for colosseum
-let videoIframe=null,videoPanelTex=null;
-
-// Colosseum video canvas
-let vidCanvas=null,vidCtx=null;
+// YouTube player
+let ytPlayer=null,ytReady=false;
+let ytCanvas=null,ytCtx=null;
 
 // ═══ MATH ═══
 function I(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
@@ -181,19 +259,16 @@ function qSlerp(a,b,t){let dot=a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3];const b2=
 
 // ═══ LOADING ═══
 async function loadAllAssets(){
-const bar=document.getElementById('load-bar');
-const pct=document.getElementById('load-pct');
+const bar=document.getElementById('load-bar');const pct=document.getElementById('load-pct');
 const keys=Object.keys(ASSETS);const total=keys.length;let loaded=0;
 for(const k of keys){const asset=ASSETS[k];
-try{if(asset.type==='image'){await new Promise((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';
+try{if(asset.type==='image'){await new Promise((res)=>{const img=new Image();img.crossOrigin='anonymous';
 img.onload=()=>{asset.img=img;res()};
 img.onerror=()=>{const c=document.createElement('canvas');c.width=2048;c.height=1024;const cx=c.getContext('2d');cx.fillStyle='#1a1a3a';cx.fillRect(0,0,2048,1024);asset.img=c;res()};
-img.src=asset.url})}
-else if(asset.type==='obj'){const resp=await fetch(asset.url);if(resp.ok)asset.data=await resp.text()}}
-catch(e){console.warn('Load fail',k,e)}
+img.src=asset.url})}}catch(e){}
 loaded++;const p=Math.round(loaded/total*100);bar.style.width=p+'%';pct.textContent=p+'%'}
 bar.style.width='100%';pct.textContent='100%';
-await new Promise(r=>setTimeout(r,600))}
+await new Promise(r=>setTimeout(r,500))}
 
 // ═══ QR SCANNER ═══
 let scannerStream=null,jsQRLoaded=false,scanCanvas=null,scanCtx=null,scanning=false;
@@ -218,30 +293,37 @@ scanning=true;scanLoop()}
 function scanLoop(){if(!scanning)return;
 const video=document.getElementById('scanner-video');
 if(video.readyState>=2&&jsQRLoaded&&window.jsQR){
-scanCanvas.width=video.videoWidth;scanCanvas.height=video.videoHeight;
-scanCtx.drawImage(video,0,0);
-const imageData=scanCtx.getImageData(0,0,scanCanvas.width,scanCanvas.height);
-const code=jsQR(imageData.data,scanCanvas.width,scanCanvas.height,{inversionAttempts:'attemptBoth'});
-if(code&&code.data){const trimmed=code.data.trim().toUpperCase();if(LESSONS[trimmed]){processCode(trimmed);return}}}
+const w=video.videoWidth,h=video.videoHeight;
+if(w>0&&h>0){scanCanvas.width=w;scanCanvas.height=h;
+scanCtx.drawImage(video,0,0,w,h);
+const imageData=scanCtx.getImageData(0,0,w,h);
+const code=jsQR(imageData.data,w,h,{inversionAttempts:'attemptBoth'});
+if(code&&code.data){const trimmed=code.data.trim().toUpperCase();
+if(LESSONS[trimmed]){processCode(trimmed);return}}}}
 requestAnimationFrame(scanLoop)}
 
 function stopScanner(){scanning=false;if(scannerStream){scannerStream.getTracks().forEach(t=>t.stop());scannerStream=null}
 document.getElementById('scanner-screen').style.display='none'}
 
-function processCode(code){stopScanner();currentLesson=LESSONS[code];if(!currentLesson)return;
-gwcPage=0;arMode=false;
+function processCode(code){
+stopScanner();
+currentLesson=LESSONS[code];
+if(!currentLesson)return;
+gwcPage=0;fading=false;fadeAlpha=1;
 document.getElementById('sess-status').textContent='ACTIVE';
 document.getElementById('sess-status').className='status active';
+updateSessionStatus('active',{currentLesson:{code,name:currentLesson.name,type:currentLesson.type,startedAt:Date.now()}});
+addLessonHistory(code,currentLesson.name);
 showEnterVR()}
 
 function exitVR(){
+stopStreaming();
 document.getElementById('vr-container').style.display='none';
-currentLesson=null;arMode=false;gwcPage=0;fading=false;fadeAlpha=1;
-panoTextures=[];
+const ytc=document.getElementById('yt-container');ytc.innerHTML='';
+currentLesson=null;gwcPage=0;fading=false;fadeAlpha=1;panoTextures=[];
 document.getElementById('sess-status').textContent='PENDING';
 document.getElementById('sess-status').className='status pending';
-if(videoIframe){videoIframe.remove();videoIframe=null}
-// Restart scanner
+updateSessionStatus('pending',{currentLesson:null});
 startScanner()}
 
 function showEnterVR(){
@@ -269,8 +351,6 @@ const VP_P=`attribute vec3 aP;attribute vec2 aT;uniform mat4 uP,uV;varying vec2 
 const FP_P=`precision mediump float;varying vec2 vT;uniform sampler2D uTx;uniform float uA;void main(){vec4 c=texture2D(uTx,vT);gl_FragColor=vec4(c.rgb,c.a*uA);}`;
 const VP_U=`attribute vec3 aP;attribute vec2 aT;uniform mat4 uM;varying vec2 vT;void main(){gl_Position=uM*vec4(aP,1.0);vT=aT;}`;
 const FP_U=`precision mediump float;varying vec2 vT;uniform sampler2D uTx;uniform float uA;void main(){vec4 c=texture2D(uTx,vT);gl_FragColor=vec4(c.rgb,c.a*uA);}`;
-const VP_M=`attribute vec3 aP;attribute vec2 aT;attribute vec3 aN;uniform mat4 uMVP;varying vec2 vT;varying vec3 vN;void main(){gl_Position=uMVP*vec4(aP,1.0);vT=aT;vN=aN;}`;
-const FP_M=`precision mediump float;varying vec2 vT;varying vec3 vN;uniform sampler2D uTx;void main(){vec3 n=normalize(vN);float l=max(dot(n,normalize(vec3(0.5,1.0,0.3))),0.0)*0.7+0.3;vec4 c=texture2D(uTx,vT);gl_FragColor=vec4(c.rgb*l,1.0);}`;
 
 const QVD=new Float32Array([-.5,-.5,0,0,1,.5,-.5,0,1,1,.5,.5,0,1,0,-.5,-.5,0,0,1,.5,.5,0,1,0,-.5,.5,0,0,0]);
 
@@ -281,85 +361,80 @@ for(let i=0;i<la;i++)for(let j=0;j<lo;j++){const a=i*(lo+1)+j,b=a+lo+1;idx.push(
 sphVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,sphVBO);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(v),gl.STATIC_DRAW);
 sphIBO=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,sphIBO);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array(idx),gl.STATIC_DRAW);sphCnt=idx.length}
 
-function parseOBJ(text){if(!text)return null;const positions=[],texcoords=[],normals=[],verts=[];
-const lines=text.split('\n');for(const line of lines){const p=line.trim().split(/\s+/);
-if(p[0]==='v')positions.push([parseFloat(p[1]),parseFloat(p[2]),parseFloat(p[3])]);
-else if(p[0]==='vt')texcoords.push([parseFloat(p[1]),parseFloat(p[2])]);
-else if(p[0]==='vn')normals.push([parseFloat(p[1]),parseFloat(p[2]),parseFloat(p[3])]);
-else if(p[0]==='f'){const face=[];for(let i=1;i<p.length;i++){const idx=p[i].split('/');
-face.push({vi:parseInt(idx[0])-1,ti:idx[1]?parseInt(idx[1])-1:-1,ni:idx[2]?parseInt(idx[2])-1:-1})}
-for(let i=1;i<face.length-1;i++){[face[0],face[i],face[i+1]].forEach(f=>{
-const pp=positions[f.vi]||[0,0,0];const tt=f.ti>=0&&texcoords[f.ti]?texcoords[f.ti]:[0,0];
-const nn=f.ni>=0&&normals[f.ni]?normals[f.ni]:[0,1,0];
-verts.push(pp[0],pp[1],pp[2],tt[0],tt[1],nn[0],nn[1],nn[2])})}}}
-return verts.length?new Float32Array(verts):null}
-
 function rR(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath()}
 
 function buildNavBtn(){
 const c=document.createElement('canvas');c.width=512;c.height=200;const x=c.getContext('2d');
-x.fillStyle=`rgba(0,40,80,${navHover?.75:.55})`;rR(x,0,0,512,200,16);x.fill();
-x.strokeStyle=`rgba(0,180,255,${navHover?.8:.35})`;x.lineWidth=3;rR(x,0,0,512,200,16);x.stroke();
-x.fillStyle='#fff';x.font='bold 70px sans-serif';x.textAlign='center';x.fillText('▶',180,130);
-x.font='bold 26px sans-serif';x.fillText('Next View',360,120);
-x.fillStyle='rgba(255,255,255,.4)';x.font='12px sans-serif';
-x.fillText((gwcPage+1)+' / '+GWC_KEYS.length,360,150);
-if(navGazeP>0){x.strokeStyle='rgba(0,200,255,.9)';x.lineWidth=5;x.lineCap='round';x.beginPath();x.arc(180,108,48,-Math.PI/2,-Math.PI/2+Math.PI*2*navGazeP);x.stroke()}
+x.fillStyle=`rgba(0,40,80,${navHover?.75:.5})`;rR(x,0,0,512,200,16);x.fill();
+x.strokeStyle=`rgba(0,180,255,${navHover?.8:.3})`;x.lineWidth=3;rR(x,0,0,512,200,16);x.stroke();
+x.fillStyle='#fff';x.font='bold 70px sans-serif';x.textAlign='center';x.fillText('▶',170,130);
+x.font='bold 26px sans-serif';x.fillText('Next View',350,115);
+x.fillStyle='rgba(255,255,255,.4)';x.font='13px sans-serif';
+x.fillText((gwcPage+1)+' / '+GWC_KEYS.length,350,150);
+if(navGazeP>0){x.strokeStyle='rgba(0,200,255,.9)';x.lineWidth=5;x.lineCap='round';x.beginPath();x.arc(170,108,48,-Math.PI/2,-Math.PI/2+Math.PI*2*navGazeP);x.stroke()}
 if(navTex)uT(navTex,c);else navTex=mT(c)}
 
 function buildCloseBtn(){
-const c=document.createElement('canvas');c.width=160;c.height=160;const x=c.getContext('2d');
-x.fillStyle=`rgba(200,30,30,${closeHover?.8:.5})`;x.beginPath();x.arc(80,80,50,0,Math.PI*2);x.fill();
-x.strokeStyle='rgba(255,255,255,.3)';x.lineWidth=2;x.beginPath();x.arc(80,80,50,0,Math.PI*2);x.stroke();
-x.strokeStyle='#fff';x.lineWidth=4;x.lineCap='round';
-x.beginPath();x.moveTo(55,55);x.lineTo(105,105);x.stroke();
-x.beginPath();x.moveTo(105,55);x.lineTo(55,105);x.stroke();
-if(closeGazeP>0){x.strokeStyle='rgba(255,200,200,.9)';x.lineWidth=4;x.lineCap='round';x.beginPath();x.arc(80,80,56,-Math.PI/2,-Math.PI/2+Math.PI*2*closeGazeP);x.stroke()}
+const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
+x.fillStyle=`rgba(180,20,20,${closeHover?.85:.55})`;x.beginPath();x.arc(128,128,80,0,Math.PI*2);x.fill();
+x.strokeStyle=`rgba(255,255,255,${closeHover?.5:.25})`;x.lineWidth=3;x.beginPath();x.arc(128,128,80,0,Math.PI*2);x.stroke();
+x.strokeStyle='#fff';x.lineWidth=6;x.lineCap='round';
+x.beginPath();x.moveTo(88,88);x.lineTo(168,168);x.stroke();
+x.beginPath();x.moveTo(168,88);x.lineTo(88,168);x.stroke();
+if(closeGazeP>0){x.strokeStyle='rgba(255,200,200,.9)';x.lineWidth=5;x.lineCap='round';x.beginPath();x.arc(128,128,90,-Math.PI/2,-Math.PI/2+Math.PI*2*closeGazeP);x.stroke()}
 if(closeTex)uT(closeTex,c);else closeTex=mT(c)}
 
-function buildARBtn(){
-const c=document.createElement('canvas');c.width=512;c.height=200;const x=c.getContext('2d');
-x.fillStyle=`rgba(0,60,40,${arBtnHover?.75:.55})`;rR(x,0,0,512,200,16);x.fill();
-x.strokeStyle=`rgba(0,255,150,${arBtnHover?.8:.35})`;x.lineWidth=3;rR(x,0,0,512,200,16);x.stroke();
-x.fillStyle='#fff';x.font='bold 50px sans-serif';x.textAlign='center';
-x.fillText(arMode?'🔙':'📱',170,125);
-x.font='bold 24px sans-serif';
-x.fillText(arMode?'Exit AR':'Show AR',350,118);
-x.fillStyle='rgba(255,255,255,.35)';x.font='11px sans-serif';
-x.fillText(arMode?'Return to 360°':'Place on surface',350,148);
-if(arBtnGazeP>0){x.strokeStyle='rgba(0,255,150,.9)';x.lineWidth=5;x.lineCap='round';x.beginPath();x.arc(170,105,45,-Math.PI/2,-Math.PI/2+Math.PI*2*arBtnGazeP);x.stroke()}
-if(arBtnTex)uT(arBtnTex,c);else arBtnTex=mT(c)}
+function buildVideoPanel(){
+const c=document.createElement('canvas');c.width=800;c.height=450;const x=c.getContext('2d');
+x.fillStyle='rgba(5,5,20,.96)';rR(x,0,0,800,450,12);x.fill();
+x.strokeStyle='rgba(0,180,255,.15)';x.lineWidth=2;rR(x,0,0,800,450,12);x.stroke();
+// Title bar
+x.fillStyle='rgba(10,10,40,.98)';x.fillRect(0,0,800,36);
+x.fillStyle='rgba(255,255,255,.7)';x.font='bold 12px sans-serif';x.textAlign='center';
+x.fillText('📹 Colosseum — Historical Documentary',400,24);
+// Video area
+x.fillStyle='rgba(20,20,50,.8)';x.fillRect(8,40,784,402);
+// Play triangle
+x.fillStyle='rgba(255,255,255,.15)';x.beginPath();x.moveTo(350,200);x.lineTo(350,280);x.lineTo(450,240);x.closePath();x.fill();
+// Circle around play
+x.strokeStyle='rgba(255,255,255,.12)';x.lineWidth=3;x.beginPath();x.arc(400,240,60,0,Math.PI*2);x.stroke();
+x.fillStyle='rgba(255,255,255,.35)';x.font='13px sans-serif';x.fillText('Video playing in background',400,340);
+x.fillStyle='rgba(0,180,255,.4)';x.font='10px sans-serif';
+x.fillText('YouTube: History of the Colosseum',400,370);
+if(vidPanelTex)uT(vidPanelTex,c);else vidPanelTex=mT(c)}
 
 function buildCrosshair(){
-const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
-x.strokeStyle='rgba(255,255,255,.5)';x.lineWidth=2.5;x.beginPath();x.arc(128,128,40,0,Math.PI*2);x.stroke();
-x.strokeStyle='rgba(255,255,255,.25)';x.lineWidth=1.5;x.beginPath();x.arc(128,128,20,0,Math.PI*2);x.stroke();
-x.fillStyle='rgba(255,255,255,.8)';x.beginPath();x.arc(128,128,4,0,Math.PI*2);x.fill();
-x.strokeStyle='rgba(255,255,255,.3)';x.lineWidth=1;
-[[128,80,128,96],[128,160,128,176],[80,128,96,128],[160,128,176,128]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
+const c=document.createElement('canvas');c.width=512;c.height=512;const x=c.getContext('2d');
+// Outer ring
+x.strokeStyle='rgba(255,255,255,.55)';x.lineWidth=3;x.beginPath();x.arc(256,256,60,0,Math.PI*2);x.stroke();
+// Middle ring
+x.strokeStyle='rgba(255,255,255,.3)';x.lineWidth=2;x.beginPath();x.arc(256,256,35,0,Math.PI*2);x.stroke();
+// Center dot
+x.fillStyle='rgba(255,255,255,.9)';x.beginPath();x.arc(256,256,6,0,Math.PI*2);x.fill();
+// Cross lines
+x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;
+[[256,180,256,215],[256,297,256,332],[180,256,215,256],[297,256,332,256]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
+// Corner accents
+x.strokeStyle='rgba(0,180,255,.3)';x.lineWidth=1.5;
+[[196,196,216,196,196,216],[316,196,296,196,316,216],[196,316,216,316,196,296],[316,316,296,316,316,296]].forEach(coords=>{
+x.beginPath();x.moveTo(coords[0],coords[1]);x.lineTo(coords[2],coords[3]);x.stroke();
+x.beginPath();x.moveTo(coords[0],coords[1]);x.lineTo(coords[4],coords[5]);x.stroke()});
 crossTex=mT(c)}
 
 function buildGazeCross(p){
-const c=document.createElement('canvas');c.width=256;c.height=256;const x=c.getContext('2d');
-x.strokeStyle='rgba(255,255,255,.1)';x.lineWidth=4;x.beginPath();x.arc(128,128,50,0,Math.PI*2);x.stroke();
-if(p>0){x.strokeStyle='rgba(0,180,255,.9)';x.lineWidth=4;x.lineCap='round';x.beginPath();x.arc(128,128,50,-Math.PI/2,-Math.PI/2+Math.PI*2*p);x.stroke()}
-x.strokeStyle='rgba(255,255,255,.25)';x.lineWidth=1.5;x.beginPath();x.arc(128,128,20,0,Math.PI*2);x.stroke();
-x.fillStyle='rgba(255,255,255,.8)';x.beginPath();x.arc(128,128,4,0,Math.PI*2);x.fill();
+const c=document.createElement('canvas');c.width=512;c.height=512;const x=c.getContext('2d');
+// Track
+x.strokeStyle='rgba(255,255,255,.1)';x.lineWidth=5;x.beginPath();x.arc(256,256,75,0,Math.PI*2);x.stroke();
+// Progress
+if(p>0){x.strokeStyle='rgba(0,180,255,.9)';x.lineWidth=5;x.lineCap='round';x.beginPath();x.arc(256,256,75,-Math.PI/2,-Math.PI/2+Math.PI*2*p);x.stroke();
+x.strokeStyle='rgba(0,180,255,.25)';x.lineWidth=10;x.beginPath();x.arc(256,256,75,-Math.PI/2,-Math.PI/2+Math.PI*2*p);x.stroke()}
+// Inner
+x.strokeStyle='rgba(255,255,255,.3)';x.lineWidth=2;x.beginPath();x.arc(256,256,35,0,Math.PI*2);x.stroke();
+x.fillStyle='rgba(255,255,255,.9)';x.beginPath();x.arc(256,256,6,0,Math.PI*2);x.fill();
+// Cross lines
+x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;
+[[256,180,256,215],[256,297,256,332],[180,256,215,256],[297,256,332,256]].forEach(([x1,y1,x2,y2])=>{x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()});
 if(gazeTex)uT(gazeTex,c);else gazeTex=mT(c)}
-
-function buildVideoPanel(){
-const c=document.createElement('canvas');c.width=640;c.height=360;const x=c.getContext('2d');
-x.fillStyle='rgba(10,10,30,.95)';rR(x,0,0,640,360,10);x.fill();
-x.strokeStyle='rgba(0,180,255,.2)';x.lineWidth=2;rR(x,0,0,640,360,10);x.stroke();
-// YouTube can't be drawn to canvas; show placeholder with play icon
-x.fillStyle='rgba(255,255,255,.06)';x.fillRect(8,8,624,344);
-x.fillStyle='rgba(255,255,255,.4)';x.font='60px sans-serif';x.textAlign='center';
-x.fillText('▶',320,200);
-x.fillStyle='rgba(255,255,255,.5)';x.font='14px sans-serif';
-x.fillText('Colosseum Documentary',320,260);
-x.fillStyle='rgba(255,255,255,.25)';x.font='10px sans-serif';
-x.fillText('Video plays in background',320,285);
-if(videoPanelTex)uT(videoPanelTex,c);else videoPanelTex=mT(c)}
 
 // ═══ ORIENTATION ═══
 function initOri(){
@@ -375,19 +450,19 @@ else{window.addEventListener('deviceorientation',handler,true);useOri2=true}}
 function getView(){if(gyOK2&&useOri2){curQ2=qSlerp(curQ2,targetQ2,.35);return qToMat(qC(curQ2))}
 sPitch+=(tPitch-sPitch)*.3;sYaw+=(tYaw-sYaw)*.3;let vm=I();vm=rXM(vm,sPitch);vm=rYM(vm,sYaw);return vm}
 
-// ═══ AR CAMERA ═══
-async function startARCam(){
-if(arCamOK)return;arCamVid=document.getElementById('cam-preview');
-const tries=[{video:{facingMode:{exact:'environment'},width:{ideal:1280}},audio:false},{video:{facingMode:'environment'},audio:false},{video:true,audio:false}];
-for(const c of tries){try{const s=await navigator.mediaDevices.getUserMedia(c);arCamVid.srcObject=s;await arCamVid.play();arCamOK=true;return}catch(e){continue}}}
+// ═══ YouTube Embed ═══
+function startYouTube(){
+const container=document.getElementById('yt-container');
+container.innerHTML=`<iframe src="https://www.youtube.com/embed/${YT_VIDEO_ID}?autoplay=1&mute=1&controls=0&loop=1&playlist=${YT_VIDEO_ID}&modestbranding=1&showinfo=0&rel=0&iv_load_policy=3&fs=0&disablekb=1&playsinline=1" allow="autoplay;encrypted-media" allowfullscreen></iframe>`;
+}
 
-// ═══ VR START ═══
+// ═══ VR ═══
 function startVR(){
 document.getElementById('vr-container').style.display='block';
 canvas=document.getElementById('vr-canvas');
 canvas.width=innerWidth*devicePixelRatio;canvas.height=innerHeight*devicePixelRatio;
-gl=canvas.getContext('webgl',{antialias:true,alpha:false,depth:true});
-if(!gl){alert('WebGL not supported');return}
+gl=canvas.getContext('webgl',{antialias:true,alpha:false,depth:true,preserveDrawingBuffer:true});
+if(!gl){alert('WebGL fail');return}
 gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
 
 progPano=mkP(VP_P,FP_P);
@@ -399,37 +474,19 @@ progUI=mkP(VP_U,FP_U);
 progUI._aP=gl.getAttribLocation(progUI,'aP');progUI._aT=gl.getAttribLocation(progUI,'aT');
 progUI._uM=gl.getUniformLocation(progUI,'uM');progUI._uT=gl.getUniformLocation(progUI,'uTx');progUI._uA=gl.getUniformLocation(progUI,'uA');
 
-progModel=mkP(VP_M,FP_M);
-progModel._aP=gl.getAttribLocation(progModel,'aP');progModel._aT=gl.getAttribLocation(progModel,'aT');
-progModel._aN=gl.getAttribLocation(progModel,'aN');progModel._uMVP=gl.getUniformLocation(progModel,'uMVP');
-progModel._uT=gl.getUniformLocation(progModel,'uTx');
-
-buildSph(32,32,50);
+buildSph(36,36,50);
 quadVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);gl.bufferData(gl.ARRAY_BUFFER,QVD,gl.STATIC_DRAW);
 
-// Load textures
 panoTextures=[];
-if(currentLesson.type==='gwc'){
-GWC_KEYS.forEach(k=>{if(ASSETS[k].img)panoTextures.push(mT(ASSETS[k].img))})}
-else if(currentLesson.type==='eiffel'){
-if(ASSETS.etTex.img)panoTextures.push(mT(ASSETS.etTex.img));
-if(ASSETS.etObj.data){const md=parseOBJ(ASSETS.etObj.data);
-if(md&&md.length>0){etModelVBO=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,etModelVBO);
-gl.bufferData(gl.ARRAY_BUFFER,md,gl.STATIC_DRAW);etModelCnt=md.length/8;
-etTexGl=mT(ASSETS.etTex.img)}}}
-else if(currentLesson.type==='colosseum'){
-if(ASSETS.colosseum.img)panoTextures.push(mT(ASSETS.colosseum.img));
-// Create video iframe
-videoIframe=document.createElement('iframe');
-videoIframe.src=COLOSSEUM_VIDEO;
-videoIframe.style.cssText='position:fixed;top:0;left:0;width:1px;height:1px;opacity:.001;z-index:-1;border:none;';
-videoIframe.allow='autoplay;encrypted-media';
-document.body.appendChild(videoIframe);
-buildVideoPanel()}
+if(currentLesson.type==='gwc'){GWC_KEYS.forEach(k=>{if(ASSETS[k].img)panoTextures.push(mT(ASSETS[k].img))})}
+else if(currentLesson.type==='eiffel'){if(ASSETS.etTex.img)panoTextures.push(mT(ASSETS.etTex.img))}
+else if(currentLesson.type==='colosseum'){if(ASSETS.colosseum.img)panoTextures.push(mT(ASSETS.colosseum.img));startYouTube();buildVideoPanel()}
 
-currentPanoIdx=0;gwcPage=0;fadeAlpha=1;fading=false;
-buildCrosshair();buildGazeCross(0);buildCloseBtn();buildNavBtn();buildARBtn();
+gwcPage=0;fadeAlpha=1;fading=false;
+buildCrosshair();buildGazeCross(0);buildCloseBtn();buildNavBtn();
+
 goFS();initOri();initTouch();
+startStreaming();
 prevTime=performance.now();requestAnimationFrame(vrLoop)}
 
 function goFS(){const el=document.documentElement;const r=el.requestFullscreen||el.webkitRequestFullscreen;if(r)r.call(el).catch(()=>{});try{screen.orientation.lock('landscape-primary').catch(()=>{})}catch(e){}}
@@ -437,7 +494,7 @@ function goFS(){const el=document.documentElement;const r=el.requestFullscreen||
 function initTouch(){
 canvas.addEventListener('touchstart',e=>{if(e.touches.length===1){dragging2=true;dsx2=e.touches[0].clientX;dsy2=e.touches[0].clientY;dy02=tYaw;dp02=tPitch}e.preventDefault()},{passive:false});
 canvas.addEventListener('touchmove',e=>{if(dragging2&&!gyOK2&&e.touches.length===1){tYaw=dy02+(e.touches[0].clientX-dsx2)*.004;tPitch=dp02-(e.touches[0].clientY-dsy2)*.004;tPitch=clamp(tPitch,-1.4,1.4)}e.preventDefault()},{passive:false});
-canvas.addEventListener('touchend',()=>{dragging2=false;if(gyOK2){tapTrigger=true;setTimeout(()=>{tapTrigger=false},150)}});
+canvas.addEventListener('touchend',()=>{dragging2=false;if(gyOK2){tapTrigger=true;setTimeout(()=>{tapTrigger=false},200)}});
 canvas.addEventListener('mousedown',e=>{dragging2=true;dsx2=e.clientX;dsy2=e.clientY;dy02=tYaw;dp02=tPitch});
 window.addEventListener('mousemove',e=>{if(dragging2&&!gyOK2){tYaw=dy02+(e.clientX-dsx2)*.004;tPitch=dp02-(e.clientY-dsy2)*.004;tPitch=clamp(tPitch,-1.4,1.4)}});
 window.addEventListener('mouseup',()=>{dragging2=false});
@@ -470,85 +527,54 @@ gl.enableVertexAttribArray(progUI._aT);gl.vertexAttribPointer(progUI._aT,2,gl.FL
 gl.uniformMatrix4fv(progUI._uM,false,mvp);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);
 gl.uniform1i(progUI._uT,0);gl.uniform1f(progUI._uA,alpha);gl.drawArrays(gl.TRIANGLES,0,6)}
 
-function drawModel(proj,view){
-if(!etModelVBO||!etTexGl||etModelCnt===0)return;
-gl.useProgram(progModel);
-let model=I();
-if(arMode){
-// Place model in front at ground level
-model=trM(model,0,-2,-4);
-model=scM(model,0.012,0.012,0.012);
-}else{
-model=trM(model,0,-20,-35);
-model=scM(model,0.04,0.04,0.04);
-}
-const rotM=I();const c=Math.cos(etRotation),s=Math.sin(etRotation);rotM[0]=c;rotM[2]=-s;rotM[8]=s;rotM[10]=c;
-model=mmul(model,rotM);
-const mvp=mmul(proj,mmul(view,model));
-gl.bindBuffer(gl.ARRAY_BUFFER,etModelVBO);
-gl.enableVertexAttribArray(progModel._aP);gl.vertexAttribPointer(progModel._aP,3,gl.FLOAT,false,32,0);
-gl.enableVertexAttribArray(progModel._aT);gl.vertexAttribPointer(progModel._aT,2,gl.FLOAT,false,32,12);
-gl.enableVertexAttribArray(progModel._aN);gl.vertexAttribPointer(progModel._aN,3,gl.FLOAT,false,32,20);
-gl.uniformMatrix4fv(progModel._uMVP,false,mvp);
-gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,etTexGl);gl.uniform1i(progModel._uT,0);
-gl.drawArrays(gl.TRIANGLES,0,etModelCnt)}
-
 // Positions
-const CLOSE_POS=[0,3.8,-6];const CLOSE_W=.6;const CLOSE_H=.6;
-const NAV_POS=[0,-2.8,-5];const NAV_W=3.5;const NAV_H=1.4;
-const AR_POS=[0,-2.8,-5];const AR_W=3.5;const AR_H=1.4;
-const VID_POS=[5,0.5,-4];const VID_W=4.5;const VID_H=2.5;
+const CLOSE_POS=[0,4.2,-6];const CLOSE_W=1.0;const CLOSE_H=1.0;
+const NAV_POS=[0,-3,-5];const NAV_W=3.8;const NAV_H=1.5;
+// Video panel: left side, flat, big
+const VID_POS=[-6,0.5,-3];const VID_W=6;const VID_H=3.4;
 
 function renderScene(proj,view){
 gl.disable(gl.DEPTH_TEST);
 
-if(arMode&&currentLesson.type==='eiffel'){
-// Draw camera as pano background
-if(arCamOK&&arCamVid&&arCamVid.readyState>=2){
-if(!arCamTex)arCamTex=mT(arCamVid);else{try{uT(arCamTex,arCamVid)}catch(e){}}
-drawPano(proj,view,arCamTex,1)}
-else{
-// Dark bg
-gl.clearColor(.05,.05,.1,1);gl.clear(gl.COLOR_BUFFER_BIT)}
-}else{
-// Regular pano
 if(currentLesson.type==='gwc'){
 const curTex=panoTextures[gwcPage];
-const nextIdx=gwcPage===0?(panoTextures.length>1?1:0):(gwcPage<panoTextures.length-1?gwcPage+1:0);
+const nextIdx=(gwcPage+1)%panoTextures.length;
 const nextTex=panoTextures[nextIdx];
 if(fading&&nextTex){drawPano(proj,view,nextTex,1)}
-drawPano(proj,view,curTex,fadeAlpha);
+if(curTex)drawPano(proj,view,curTex,fadeAlpha);
 }else if(panoTextures[0]){
-drawPano(proj,view,panoTextures[0],1)}}
+drawPano(proj,view,panoTextures[0],1)}
 
 gl.enable(gl.DEPTH_TEST);
-
-// 3D model for eiffel
-if(currentLesson.type==='eiffel'){
-gl.depthMask(true);
-drawModel(proj,view);
-gl.depthMask(true)}
-
 gl.disable(gl.DEPTH_TEST);
 
-// Close button (top)
+// Close button top
 drawQuadFixed(proj,view,CLOSE_POS,CLOSE_W,CLOSE_H,closeTex,.95);
 
-// Nav button for GWC
+// Nav for GWC
 if(currentLesson.type==='gwc'&&!fading){
 drawQuadFixed(proj,view,NAV_POS,NAV_W,NAV_H,navTex,.95)}
 
-// AR button for eiffel
-if(currentLesson.type==='eiffel'){
-drawQuadFixed(proj,view,AR_POS,AR_W,AR_H,arBtnTex,.95)}
-
-// Video panel for colosseum
-if(currentLesson.type==='colosseum'){
-drawQuadFixed(proj,view,VID_POS,VID_W,VID_H,videoPanelTex,.9)}
+// Video panel for colosseum — flat on left side
+if(currentLesson.type==='colosseum'&&vidPanelTex){
+// Rotate quad to face right (perpendicular to view)
+gl.useProgram(progUI);
+let m=I();
+m=trM(m,VID_POS[0],VID_POS[1],VID_POS[2]);
+// Rotate 90 degrees around Y to face right
+const ry=I();const ca=Math.cos(Math.PI/2.5),sa=Math.sin(Math.PI/2.5);
+ry[0]=ca;ry[2]=-sa;ry[8]=sa;ry[10]=ca;
+m=mmul(m,ry);
+m=scM(m,VID_W,VID_H,1);
+const mvp=mmul(proj,mmul(view,m));
+gl.bindBuffer(gl.ARRAY_BUFFER,quadVBO);gl.enableVertexAttribArray(progUI._aP);gl.vertexAttribPointer(progUI._aP,3,gl.FLOAT,false,20,0);
+gl.enableVertexAttribArray(progUI._aT);gl.vertexAttribPointer(progUI._aT,2,gl.FLOAT,false,20,12);
+gl.uniformMatrix4fv(progUI._uM,false,mvp);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vidPanelTex);
+gl.uniform1i(progUI._uT,0);gl.uniform1f(progUI._uA,.92);gl.drawArrays(gl.TRIANGLES,0,6)}
 
 // Crosshair
 const iv=inv4(view),ep=[iv[12],iv[13],iv[14]],fw=[-iv[8],-iv[9],-iv[10]];
-const cs=gzH2?.45:.3;
+const cs=gzH2?.65:.45;
 drawQuadBB(proj,view,[ep[0]+fw[0]*5,ep[1]+fw[1]*5,ep[2]+fw[2]*5],cs,cs,gzH2?gazeTex:crossTex,1);
 
 gl.enable(gl.DEPTH_TEST)}
@@ -556,10 +582,9 @@ gl.enable(gl.DEPTH_TEST)}
 function doGaze(dt,go,gd){
 gzH2=null;let bestGP=0;
 
-// Close button
+// Close
 const closeHit=hitQ(go,gd,CLOSE_POS,CLOSE_W,CLOSE_H);
-if(closeHit){
-gzH2='close';
+if(closeHit){gzH2='close';
 if(!closeHover){closeHover=true;buildCloseBtn()}
 closeGazeT+=dt;closeGazeP=Math.min(closeGazeT/GAZE_TIME,1);bestGP=closeGazeP;
 if(closeGazeT>=GAZE_TIME){exitVR();return}
@@ -567,44 +592,27 @@ buildCloseBtn()}
 else{if(closeHover||closeGazeT>0){closeHover=false;closeGazeT=0;closeGazeP=0;buildCloseBtn()}}
 if(tapTrigger&&closeHit){exitVR();tapTrigger=false;return}
 
-// Nav for GWC
+// Nav GWC
 if(currentLesson.type==='gwc'&&!fading){
 const navHit=hitQ(go,gd,NAV_POS,NAV_W,NAV_H);
-if(navHit){
-gzH2='nav';
+if(navHit){gzH2='nav';
 if(!navHover){navHover=true;buildNavBtn()}
 navGazeT+=dt;navGazeP=Math.min(navGazeT/GAZE_TIME,1);bestGP=Math.max(bestGP,navGazeP);
-if(navGazeT>=GAZE_TIME){
-fading=true;fadeDir=1;navGazeT=0;navGazeP=0;gzH2=null;navHover=false;buildNavBtn()}
+if(navGazeT>=GAZE_TIME){fading=true;fadeDir=1;navGazeT=0;navGazeP=0;gzH2=null;navHover=false;buildNavBtn();
+update(sessRef,{currentView:gwcPage+1,lastUpdated:Date.now()})}
 else buildNavBtn()}
 else{if(navHover||navGazeT>0){navHover=false;navGazeT=0;navGazeP=0;buildNavBtn()}}
-if(tapTrigger&&navHit){fading=true;fadeDir=1;navGazeT=0;navGazeP=0;tapTrigger=false;navHover=false;buildNavBtn()}}
-
-// AR for eiffel
-if(currentLesson.type==='eiffel'){
-const arHit=hitQ(go,gd,AR_POS,AR_W,AR_H);
-if(arHit){
-gzH2='ar';
-if(!arBtnHover){arBtnHover=true;buildARBtn()}
-arBtnGazeT+=dt;arBtnGazeP=Math.min(arBtnGazeT/GAZE_TIME,1);bestGP=Math.max(bestGP,arBtnGazeP);
-if(arBtnGazeT>=GAZE_TIME){
-arMode=!arMode;
-if(arMode&&!arCamOK)startARCam();
-arBtnGazeT=0;arBtnGazeP=0;arBtnHover=false;buildARBtn()}
-else buildARBtn()}
-else{if(arBtnHover||arBtnGazeT>0){arBtnHover=false;arBtnGazeT=0;arBtnGazeP=0;buildARBtn()}}
-if(tapTrigger&&arHit){arMode=!arMode;if(arMode&&!arCamOK)startARCam();arBtnGazeT=0;arBtnGazeP=0;tapTrigger=false;arBtnHover=false;buildARBtn()}}
+if(tapTrigger&&navHit){fading=true;fadeDir=1;navGazeT=0;navGazeP=0;tapTrigger=false;navHover=false;buildNavBtn();
+update(sessRef,{currentView:gwcPage+1,lastUpdated:Date.now()})}}
 
 buildGazeCross(bestGP);
 tapTrigger=false}
 
 function vrLoop(time){
 requestAnimationFrame(vrLoop);
-const dt=Math.min((time-prevTime)/1000,.1);prevTime=time;
+const dt=Math.min((time-prevTime)/1000,.1);prevTime=time;frc++;
 
-if(currentLesson&&currentLesson.type==='eiffel')etRotation+=dt*.3;
-
-// Fade logic GWC
+// Fade GWC
 if(fading&&currentLesson&&currentLesson.type==='gwc'){
 if(fadeDir===1){fadeAlpha-=dt*1.8;if(fadeAlpha<=0){fadeAlpha=0;gwcPage=(gwcPage+1)%panoTextures.length;fadeDir=-1}}
 else if(fadeDir===-1){fadeAlpha+=dt*1.8;if(fadeAlpha>=1){fadeAlpha=1;fading=false;fadeDir=0;buildNavBtn()}}}
@@ -614,7 +622,6 @@ if(canvas.width!==cw||canvas.height!==ch){canvas.width=cw;canvas.height=ch}
 
 const vm=getView();
 const iv=inv4(vm),go=[iv[12],iv[13],iv[14]],gd=[-iv[8],-iv[9],-iv[10]];
-
 doGaze(dt,go,gd);
 
 const fr=vrFov*Math.PI/180,ipm=vrIpd/1000;
