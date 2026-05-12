@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Omni VR — Analytics Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;overflow-x:hidden}
+
+.login-screen{position:fixed;inset:0;z-index:1000;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
+.login-logo{font-size:48px;margin-bottom:16px}
+.login-title{font-size:28px;font-weight:800;margin-bottom:4px;background:linear-gradient(90deg,#00b4ff,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.login-sub{font-size:13px;opacity:.4;margin-bottom:32px}
+.login-input{padding:14px 24px;font-size:20px;background:rgba(255,255,255,.05);border:2px solid rgba(0,180,255,.3);border-radius:14px;color:#fff;width:300px;text-align:center;outline:none;letter-spacing:4px;font-family:monospace;font-weight:700}
+.login-input:focus{border-color:rgba(0,180,255,.7);box-shadow:0 0 20px rgba(0,180,255,.15)}
+.login-input.error{border-color:#ff4444;animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.login-btn{margin-top:16px;padding:12px 48px;font-size:15px;font-weight:700;background:linear-gradient(135deg,#0066ff,#7c3aed);border:none;border-radius:12px;color:#fff;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.login-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,100,255,.3)}
+.login-btn:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
+.login-hint{margin-top:16px;font-size:11px;opacity:.3}
+
+.dashboard{display:none;min-height:100vh;padding:20px}
+.dash-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;margin-bottom:20px}
+.dash-header-left{display:flex;align-items:center;gap:16px}
+.dash-header-left .logo{font-size:28px}
+.dash-header-left .title{font-size:18px;font-weight:700}
+.dash-header-left .title span{background:linear-gradient(90deg,#00b4ff,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.session-info{display:flex;align-items:center;gap:12px}
+.session-chip{padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;font-family:monospace;background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.2);color:#00b4ff}
+.status-chip{padding:5px 12px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+.status-chip.live{background:rgba(255,50,50,.15);color:#ff4444;border:1px solid rgba(255,50,50,.2);animation:pulse-live 1.5s infinite}
+.status-chip.ended{background:rgba(100,100,100,.15);color:#888;border:1px solid rgba(100,100,100,.2)}
+.status-chip.pending{background:rgba(255,180,0,.15);color:#ffb400;border:1px solid rgba(255,180,0,.2)}
+@keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.5}}
+
+.main-grid{display:grid;grid-template-columns:1fr 380px;gap:20px}
+@media(max-width:900px){.main-grid{grid-template-columns:1fr}}
+
+.feed-container{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden}
+.feed-header{padding:12px 20px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-between}
+.feed-header .label{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.feed-header .label .dot{width:8px;height:8px;border-radius:50%;background:#ff4444;animation:pulse-live 1s infinite}
+.feed-header .fps{font-size:10px;opacity:.3;font-family:monospace}
+.feed-img-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center}
+.feed-img-wrap img{width:100%;height:100%;object-fit:contain}
+.feed-img-wrap .no-feed{color:rgba(255,255,255,.2);font-size:14px}
+.feed-overlay{position:absolute;top:8px;left:8px;display:flex;gap:6px}
+.feed-overlay .tag{padding:3px 8px;border-radius:4px;font-size:9px;font-weight:600;background:rgba(0,0,0,.6)}
+.feed-ended-overlay{position:absolute;inset:0;background:rgba(0,0,0,.8);display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.feed-ended-overlay .ico{font-size:40px}
+.feed-ended-overlay .msg{font-size:16px;font-weight:700}
+.feed-ended-overlay .sub{font-size:11px;opacity:.4}
+
+.sidebar{display:flex;flex-direction:column;gap:16px}
+.card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden}
+.card-header{padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+.card-body{padding:12px 16px}
+.data-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.data-row:last-child{border-bottom:none}
+.data-row .label{font-size:11px;opacity:.5;display:flex;align-items:center;gap:6px}
+.data-row .value{font-size:12px;font-weight:600;font-family:monospace;text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.data-row .value.highlight{color:#00b4ff}
+.data-row .value.warn{color:#ffb400}
+.data-row .value.danger{color:#ff4444}
+.data-row .value.good{color:#00cc66}
+
+.warnings-container{display:flex;flex-direction:column;gap:8px}
+.warning-bar{padding:10px 14px;border-radius:10px;font-size:11px;display:flex;align-items:center;gap:8px;animation:slideIn .3s}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+.warning-bar.caution{background:rgba(255,180,0,.1);border:1px solid rgba(255,180,0,.2);color:#ffb400}
+.warning-bar.danger{background:rgba(255,50,50,.1);border:1px solid rgba(255,50,50,.2);color:#ff4444}
+.warning-bar .ico{font-size:18px}
+.warning-bar .text{flex:1}
+.warning-bar .text strong{display:block;font-size:12px;margin-bottom:2px}
+
+.history-list{max-height:160px;overflow-y:auto}
+.history-item{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:11px;display:flex;justify-content:space-between}
+.history-item:last-child{border-bottom:none}
+.history-item .name{opacity:.7}
+.history-item .time{opacity:.3;font-family:monospace;font-size:10px}
+
+.disconnect-btn{margin-top:8px;padding:10px;width:100%;font-size:12px;font-weight:600;background:rgba(255,50,50,.1);border:1px solid rgba(255,50,50,.2);border-radius:10px;color:#ff6666;cursor:pointer;transition:background .2s}
+.disconnect-btn:hover{background:rgba(255,50,50,.2)}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen">
+<div class="login-logo">📊</div>
+<div class="login-title">Analytics Dashboard</div>
+<div class="login-sub">Omni VR Learning — Teacher Monitor</div>
+<input class="login-input" id="session-input" type="text" placeholder="000000" maxlength="6" autocomplete="off" spellcheck="false">
+<button class="login-btn" id="connect-btn" disabled>Connect to Session</button>
+<div class="login-hint">Enter the 6-digit session PIN from the student's VR device</div>
+</div>
+
+<div class="dashboard" id="dashboard">
+<div class="dash-header">
+<div class="dash-header-left">
+<div class="logo">📊</div>
+<div class="title"><span>Omni VR</span> Analytics</div>
+</div>
+<div class="session-info">
+<div class="session-chip" id="dash-session-id">------</div>
+<div class="status-chip pending" id="dash-status">CONNECTING</div>
+</div>
+</div>
+
+<div class="main-grid">
+<div>
+<div class="feed-container">
+<div class="feed-header">
+<div class="label"><div class="dot" id="live-dot"></div> <span id="feed-label">Live Feed</span></div>
+<div class="fps" id="feed-fps">-- fps</div>
+</div>
+<div class="feed-img-wrap">
+<img id="feed-img" style="display:none" alt="VR Feed">
+<div class="no-feed" id="no-feed">Waiting for stream...</div>
+<div class="feed-overlay">
+<div class="tag" id="feed-res">--</div>
+<div class="tag" id="feed-frame">F: --</div>
+</div>
+<div class="feed-ended-overlay" id="feed-ended">
+<div class="ico">📺</div>
+<div class="msg">VR Stream Finished</div>
+<div class="sub">The student has ended their VR session</div>
+</div>
+</div>
+</div>
+
+<div style="margin-top:16px">
+<div class="card">
+<div class="card-header">⚠️ Health & Safety Alerts</div>
+<div class="card-body">
+<div class="warnings-container" id="warnings">
+<div style="font-size:11px;opacity:.3;text-align:center;padding:8px">No warnings yet</div>
+</div>
+</div>
+</div>
+</div>
+
+<div style="margin-top:16px">
+<div class="card">
+<div class="card-header">📜 Lesson History</div>
+<div class="card-body">
+<div class="history-list" id="history-list">
+<div style="font-size:11px;opacity:.3;text-align:center;padding:8px">No lessons recorded</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sidebar">
+<div class="card">
+<div class="card-header">📋 Session Information</div>
+<div class="card-body" id="session-data">
+<div class="data-row"><div class="label">📌 Session ID</div><div class="value highlight" id="d-session-id">--</div></div>
+<div class="data-row"><div class="label">📡 Status</div><div class="value" id="d-status">--</div></div>
+<div class="data-row"><div class="label">📅 Created</div><div class="value" id="d-created">--</div></div>
+<div class="data-row"><div class="label">⏱️ Session Duration</div><div class="value highlight" id="d-duration">--</div></div>
+<div class="data-row"><div class="label">🎓 Current Lesson</div><div class="value highlight" id="d-lesson">--</div></div>
+<div class="data-row"><div class="label">📂 Lesson Type</div><div class="value" id="d-lesson-type">--</div></div>
+<div class="data-row"><div class="label">🕐 Lesson Started</div><div class="value" id="d-lesson-started">--</div></div>
+<div class="data-row"><div class="label">⏳ Time in Lesson</div><div class="value" id="d-lesson-time">--</div></div>
+<div class="data-row"><div class="label">👁️ Current View</div><div class="value" id="d-current-view">--</div></div>
+<div class="data-row"><div class="label">🖥️ Resolution</div><div class="value" id="d-resolution">--</div></div>
+<div class="data-row"><div class="label">🎞️ Frame Count</div><div class="value" id="d-frame-count">--</div></div>
+<div class="data-row"><div class="label">📊 Frame Rate</div><div class="value" id="d-fps">--</div></div>
+<div class="data-row"><div class="label">📱 Device</div><div class="value" id="d-device">--</div></div>
+<div class="data-row"><div class="label">📐 Screen Size</div><div class="value" id="d-screen">--</div></div>
+<div class="data-row"><div class="label">🔄 Last Updated</div><div class="value" id="d-last-update">--</div></div>
+</div>
+</div>
+
+<button class="disconnect-btn" id="disconnect-btn">🔌 Disconnect & Return</button>
+</div>
+</div>
+</div>
+
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+import{getDatabase,ref,onValue,off}from"https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+const firebaseConfig={
+apiKey:"AIzaSyDY8-iGfATNeoZ7OxdnfVZ634fiqZdUrWs",
+authDomain:"uukr-d4caa.firebaseapp.com",
+databaseURL:"https://uukr-d4caa-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId:"uukr-d4caa",
+storageBucket:"uukr-d4caa.firebasestorage.app",
+messagingSenderId:"1032747716244",
+appId:"1:1032747716244:web:1bd0a19c0ebc0ea879ee81",
+measurementId:"G-E740HW5LCS"
+};
+
+const fbApp=initializeApp(firebaseConfig);
+const db=getDatabase(fbApp);
+
+let connectedSession=null;
+let sessionRef=null;
+let feedRef=null;
+let sessionListener=null;
+let feedListener=null;
+let historyListener=null;
+
+let sessionData=null;
+let feedData=null;
+let lessonHistory=[];
+let lastFrameTime=0;
+let fpsCounter=0;
+let currentFps=0;
+let fpsInterval=null;
+let updateInterval=null;
+
+let warning20Shown=false;
+let warning40Shown=false;
+let streamEndedShown=false;
+let lastStreamStatus=null;
+
+// ═══ LOGIN ═══
+const sessionInput=document.getElementById('session-input');
+const connectBtn=document.getElementById('connect-btn');
+
+sessionInput.addEventListener('input',()=>{
+const v=sessionInput.value.replace(/\D/g,'');
+sessionInput.value=v;
+connectBtn.disabled=v.length!==6;
+sessionInput.classList.remove('error');
+});
+
+sessionInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!connectBtn.disabled)connectBtn.click()});
+
+connectBtn.addEventListener('click',()=>{
+const sid=sessionInput.value.trim();
+if(sid.length!==6)return;
+connectBtn.disabled=true;
+connectBtn.textContent='Connecting...';
+tryConnect(sid);
+});
+
+async function tryConnect(sid){
+const testRef=ref(db,'sessions/'+sid);
+onValue(testRef,(snapshot)=>{
+off(testRef);
+const data=snapshot.val();
+if(!data){
+sessionInput.classList.add('error');
+connectBtn.disabled=false;
+connectBtn.textContent='Connect to Session';
+return;
+}
+connectedSession=sid;
+startDashboard(sid);
+},{onlyOnce:true});
+}
+
+function startDashboard(sid){
+document.getElementById('login-screen').style.opacity='0';
+setTimeout(()=>{document.getElementById('login-screen').style.display='none'},500);
+document.getElementById('dashboard').style.display='block';
+document.getElementById('dash-session-id').textContent=sid;
+document.getElementById('d-session-id').textContent=sid;
+
+sessionRef=ref(db,'sessions/'+sid);
+feedRef=ref(db,'sessions/'+sid+'/liveFeed');
+const histRef=ref(db,'sessions/'+sid+'/lessonHistory');
+
+// Session data listener
+sessionListener=onValue(sessionRef,(snap)=>{
+const d=snap.val();if(!d)return;
+sessionData=d;
+updateSessionInfo(d);
+});
+
+// Feed listener
+feedListener=onValue(feedRef,(snap)=>{
+const d=snap.val();if(!d)return;
+feedData=d;
+updateFeed(d);
+});
+
+// History listener
+historyListener=onValue(histRef,(snap)=>{
+const d=snap.val();
+if(d){
+lessonHistory=Object.values(d).sort((a,b)=>b.timestamp-a.timestamp);
+updateHistory();
+}
+});
+
+// FPS counter
+fpsInterval=setInterval(()=>{
+currentFps=fpsCounter;fpsCounter=0;
+document.getElementById('feed-fps').textContent=currentFps+' fps';
+document.getElementById('d-fps').textContent=currentFps+' fps';
+},1000);
+
+// Duration & warning ticker
+updateInterval=setInterval(()=>{
+updateTimers();
+checkWarnings();
+checkStreamStatus();
+},1000);
+}
+
+function updateSessionInfo(d){
+// Status
+const status=d.status||'pending';
+const statusEl=document.getElementById('dash-status');
+const dStatus=document.getElementById('d-status');
+statusEl.textContent=status.toUpperCase();
+statusEl.className='status-chip '+(status==='streaming'?'live':status==='active'?'live':'pending');
+dStatus.textContent=status.charAt(0).toUpperCase()+status.slice(1);
+dStatus.className='value '+(status==='streaming'?'danger':status==='active'?'good':'warn');
+
+lastStreamStatus=status;
+
+// Created
+if(d.createdAt){
+document.getElementById('d-created').textContent=new Date(d.createdAt).toLocaleString();
+}
+
+// Device
+if(d.device){
+let dev=d.device;
+if(dev.includes('iPhone'))dev='iPhone';
+else if(dev.includes('Android'))dev='Android';
+else if(dev.includes('iPad'))dev='iPad';
+else dev=dev.substring(0,30)+'...';
+document.getElementById('d-device').textContent=dev;
+}
+
+// Screen
+if(d.screenWidth&&d.screenHeight){
+document.getElementById('d-screen').textContent=d.screenWidth+'×'+d.screenHeight;
+}
+
+// Current lesson
+if(d.currentLesson){
+document.getElementById('d-lesson').textContent=d.currentLesson.name||'--';
+document.getElementById('d-lesson').className='value highlight';
+document.getElementById('d-lesson-type').textContent=(d.currentLesson.type||'--').toUpperCase();
+if(d.currentLesson.startedAt){
+document.getElementById('d-lesson-started').textContent=new Date(d.currentLesson.startedAt).toLocaleTimeString();
+}
+}else{
+document.getElementById('d-lesson').textContent='None';
+document.getElementById('d-lesson').className='value';
+document.getElementById('d-lesson-type').textContent='--';
+document.getElementById('d-lesson-started').textContent='--';
+document.getElementById('d-lesson-time').textContent='--';
+}
+
+// Current view
+if(d.currentView!==undefined){
+document.getElementById('d-current-view').textContent='View '+(d.currentView+1);
+}
+
+// Last updated
+if(d.lastUpdated){
+document.getElementById('d-last-update').textContent=new Date(d.lastUpdated).toLocaleTimeString();
+}
+}
+
+function updateFeed(d){
+if(!d||!d.frame)return;
+
+streamEndedShown=false;
+const endedOverlay=document.getElementById('feed-ended');
+endedOverlay.style.display='none';
+
+const img=document.getElementById('feed-img');
+const noFeed=document.getElementById('no-feed');
+img.src=d.frame;
+img.style.display='block';
+noFeed.style.display='none';
+
+fpsCounter++;
+
+if(d.resolution)document.getElementById('feed-res').textContent=d.resolution;
+if(d.frameNumber){
+document.getElementById('feed-frame').textContent='F: '+d.frameNumber;
+document.getElementById('d-frame-count').textContent=d.frameNumber.toLocaleString();
+}
+if(d.resolution)document.getElementById('d-resolution').textContent=d.resolution;
+
+const liveDot=document.getElementById('live-dot');
+liveDot.style.background='#ff4444';
+}
+
+function updateTimers(){
+if(!sessionData)return;
+
+// Session duration
+if(sessionData.createdTimestamp){
+const elapsed=Date.now()-sessionData.createdTimestamp;
+document.getElementById('d-duration').textContent=formatDuration(elapsed);
+}
+
+// Lesson time
+if(sessionData.currentLesson&&sessionData.currentLesson.startedAt){
+const lessonElapsed=Date.now()-sessionData.currentLesson.startedAt;
+document.getElementById('d-lesson-time').textContent=formatDuration(lessonElapsed);
+}
+}
+
+function checkWarnings(){
+if(!sessionData||!sessionData.createdTimestamp)return;
+const elapsed=Date.now()-sessionData.createdTimestamp;
+const mins=elapsed/60000;
+
+const container=document.getElementById('warnings');
+
+if(mins>=20&&!warning20Shown){
+warning20Shown=true;
+container.innerHTML='';
+addWarning('caution','⚠️','20 Minutes of VR Usage','The student has been using VR for 20 minutes. Consider recommending a short break to reduce eye strain and fatigue.');
+}
+
+if(mins>=40&&!warning40Shown){
+warning40Shown=true;
+addWarning('danger','🚨','40 Minutes — Eye Strain Risk','Extended VR usage detected! Strongly recommend the student takes a 10-15 minute break immediately. Prolonged use can cause headaches, eye strain, and discomfort.');
+}
+}
+
+function addWarning(type,icon,title,text){
+const container=document.getElementById('warnings');
+// Remove placeholder
+const placeholder=container.querySelector('div[style]');
+if(placeholder&&placeholder.textContent.includes('No warnings'))container.innerHTML='';
+
+const div=document.createElement('div');
+div.className='warning-bar '+type;
+div.innerHTML=`<div class="ico">${icon}</div><div class="text"><strong>${title}</strong>${text}</div>`;
+container.prepend(div);
+
+// Browser notification
+if(Notification.permission==='granted'){
+new Notification('Omni VR — '+title,{body:text,icon:'📊'});
+}else if(Notification.permission!=='denied'){
+Notification.requestPermission().then(p=>{if(p==='granted')new Notification('Omni VR — '+title,{body:text});});
+}
+}
+
+function checkStreamStatus(){
+if(!sessionData)return;
+const status=sessionData.status;
+
+if(lastStreamStatus==='streaming'&&(status==='pending'||status==='active'||!status)){
+if(!streamEndedShown){
+streamEndedShown=true;
+const endedOverlay=document.getElementById('feed-ended');
+endedOverlay.style.display='flex';
+document.getElementById('feed-label').textContent='Stream Ended';
+const liveDot=document.getElementById('live-dot');
+liveDot.style.background='#666';
+liveDot.style.animation='none';
+
+const statusEl=document.getElementById('dash-status');
+statusEl.textContent='ENDED';
+statusEl.className='status-chip ended';
+
+addWarning('caution','📺','VR Stream Ended','The student has finished their VR session. Total session data has been recorded.');
+}
+}
+
+// Also detect if no new frames for 5+ seconds while status is streaming
+if(feedData&&feedData.timestamp){
+const sinceLast=Date.now()-feedData.timestamp;
+if(sinceLast>5000&&status==='pending'){
+if(!streamEndedShown){
+streamEndedShown=true;
+const endedOverlay=document.getElementById('feed-ended');
+endedOverlay.style.display='flex';
+document.getElementById('feed-label').textContent='Stream Ended';
+const liveDot=document.getElementById('live-dot');
+liveDot.style.background='#666';
+liveDot.style.animation='none';
+}
+}
+}
+}
+
+function updateHistory(){
+const container=document.getElementById('history-list');
+if(lessonHistory.length===0)return;
+container.innerHTML='';
+lessonHistory.forEach(h=>{
+const div=document.createElement('div');
+div.className='history-item';
+const t=new Date(h.timestamp);
+div.innerHTML=`<div class="name">📚 ${h.name||h.code}</div><div class="time">${t.toLocaleTimeString()}</div>`;
+container.appendChild(div);
+});
+}
+
+function formatDuration(ms){
+const s=Math.floor(ms/1000);
+const h=Math.floor(s/3600);
+const m=Math.floor((s%3600)/60);
+const sec=s%60;
+if(h>0)return `${h}h ${m}m ${sec}s`;
+if(m>0)return `${m}m ${sec}s`;
+return `${sec}s`;
+}
+
+// Disconnect
+document.getElementById('disconnect-btn').addEventListener('click',()=>{
+if(sessionListener)off(ref(db,'sessions/'+connectedSession));
+if(feedListener)off(ref(db,'sessions/'+connectedSession+'/liveFeed'));
+if(historyListener)off(ref(db,'sessions/'+connectedSession+'/lessonHistory'));
+if(fpsInterval)clearInterval(fpsInterval);
+if(updateInterval)clearInterval(updateInterval);
+
+connectedSession=null;sessionData=null;feedData=null;lessonHistory=[];
+warning20Shown=false;warning40Shown=false;streamEndedShown=false;
+
+document.getElementById('dashboard').style.display='none';
+document.getElementById('login-screen').style.display='flex';
+document.getElementById('login-screen').style.opacity='1';
+sessionInput.value='';connectBtn.disabled=true;connectBtn.textContent='Connect to Session';
+});
+
+// Request notification permission
+if('Notification' in window&&Notification.permission==='default'){
+Notification.requestPermission();
+}
+</script>
+</body>
+</html>
