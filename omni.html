@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Omni VR Learning</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:system-ui,-apple-system,sans-serif;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none}
+
+#loading-screen{position:fixed;inset:0;z-index:10000;background:linear-gradient(140deg,#030312,#0a0a3a,#030312);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
+.load-icon{font-size:60px;margin-bottom:20px;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.1);opacity:.7}}
+.load-title{font-size:22px;font-weight:700;margin-bottom:8px;background:linear-gradient(90deg,#00b4ff,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.load-sub{font-size:12px;opacity:.4;margin-bottom:24px}
+.load-bar-bg{width:260px;height:4px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.load-bar-fg{height:100%;width:0;background:linear-gradient(90deg,#00b4ff,#8b5cf6);border-radius:3px;transition:width .15s}
+.load-status{font-size:11px;opacity:.35;max-width:280px;text-align:center;min-height:32px}
+.load-items{margin-top:16px;display:flex;flex-direction:column;gap:6px;width:260px}
+.load-item{display:flex;align-items:center;gap:8px;font-size:11px;opacity:.5}
+.load-item .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.15);flex-shrink:0;transition:background .3s}
+.load-item.done .dot{background:#00cc66}
+.load-item.active .dot{background:#00b4ff;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+#scanner-screen{position:fixed;inset:0;z-index:9000;background:#000;display:none;flex-direction:column;align-items:center;justify-content:center}
+#scanner-video{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.scanner-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:2}
+.scan-frame{width:250px;height:250px;position:relative}
+.scan-corner{position:absolute;width:30px;height:30px;border-color:#00b4ff;border-style:solid;border-width:0}
+.scan-corner.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-top-left-radius:8px}
+.scan-corner.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-top-right-radius:8px}
+.scan-corner.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-bottom-left-radius:8px}
+.scan-corner.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-bottom-right-radius:8px}
+.scan-line{position:absolute;left:10px;right:10px;height:2px;background:linear-gradient(90deg,transparent,#00b4ff,transparent);animation:scanMove 2s ease-in-out infinite;top:0}
+@keyframes scanMove{0%,100%{top:10px}50%{top:calc(100% - 10px)}}
+.scan-title{font-size:18px;font-weight:700;margin-bottom:20px;text-shadow:0 2px 8px rgba(0,0,0,.8)}
+.scan-hint{font-size:12px;opacity:.5;margin-top:20px;text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.scan-manual{margin-top:20px;padding:10px 24px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:10px;font-size:12px;cursor:pointer;color:#fff}
+#manual-input{position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.9);display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+#manual-input input{padding:14px 20px;font-size:16px;background:rgba(255,255,255,.08);border:2px solid rgba(0,180,255,.4);border-radius:12px;color:#fff;width:280px;text-align:center;outline:none}
+#manual-input input:focus{border-color:rgba(0,180,255,.8)}
+#manual-input button{padding:12px 40px;font-size:14px;font-weight:600;background:linear-gradient(135deg,rgba(0,100,255,.5),rgba(100,50,255,.5));border:2px solid rgba(0,180,255,.5);border-radius:12px;color:#fff;cursor:pointer}
+#manual-input .back-btn{background:none;border:1px solid rgba(255,255,255,.2);font-size:12px;padding:8px 20px;margin-top:8px}
+
+#vr-container{position:fixed;inset:0;z-index:100;display:none;background:#000}
+#vr-container canvas{width:100%;height:100%;display:block}
+#enter-vr-overlay{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,.85);display:none;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:opacity .4s}
+#enter-vr-overlay .evr-title{font-size:20px;font-weight:700;margin-bottom:6px}
+#enter-vr-overlay .evr-sub{font-size:11px;opacity:.4}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+<div class="load-icon">🌍</div>
+<div class="load-title">Omni VR Learning</div>
+<div class="load-sub">Preparing immersive experience</div>
+<div class="load-bar-bg"><div class="load-bar-fg" id="load-bar"></div></div>
+<div class="load-status" id="load-status">Initializing...</div>
+<div class="load-items" id="load-items"></div>
+</div>
+
+<div id="scanner-screen">
+<video id="scanner-video" playsinline autoplay muted></video>
+<div class="scanner-overlay">
+<div class="scan-title">📷 Scan Lesson QR Code</div>
+<div class="scan-frame">
+<div class="scan-corner tl"></div>
+<div class="scan-corner tr"></div>
+<div class="scan-corner bl"></div>
+<div class="scan-corner br"></div>
+<div class="scan-line"></div>
+</div>
+<div class="scan-hint">Point camera at the QR code on your lesson card</div>
+<div class="scan-manual" id="btn-manual">⌨️ Enter code manually</div>
+</div>
+</div>
+
+<div id="manual-input">
+<div style="font-size:16px;font-weight:600;margin-bottom:4px">Enter Lesson Code</div>
+<div style="font-size:11px;opacity:.4;margin-bottom:12px">e.g. ET-G-531857 or GWC-G-347028</div>
+<input type="text" id="code-input" placeholder="Enter code here..." autocomplete="off" spellcheck="false">
+<button id="btn-submit">Launch Lesson →</button>
+<button class="back-btn" id="btn-back">← Back to Scanner</button>
+</div>
+
+<div id="enter-vr-overlay">
+<div class="evr-title">Tap to Enter VR</div>
+<div class="evr-sub">Place phone in headset after tapping</div>
+</div>
+
+<div id="vr-container"><canvas id="vr-canvas"></canvas></div>
+
+<script>
+"use strict";
+
+// ═══════════════════════════════════════
+// ASSETS
+// ═══════════════════════════════════════
+const ASSETS = {
+gwc1: { url: 'https://i.ibb.co/k2QRKbNt/Greatwallchina-2.jpg', type: 'image', label: 'Great Wall of China (View 1)', img: null },
+gwc2: { url: 'https://i.ibb.co/sJJc0gjP/Greatwallchina-1.jpg', type: 'image', label: 'Great Wall of China (View 2)', img: null },
+etObj: { url: 'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/10067_Eiffel_Tower_v1_max2010_it1.obj', type: 'obj', label: 'Eiffel Tower 3D Model', data: null },
+etTex: { url: 'https://raw.githubusercontent.com/bw00111/omni360/refs/heads/main/eiffeltower.jpg', type: 'image', label: 'Eiffel Tower Texture', img: null },
+};
+
+const LESSONS = {
+'ET-G-531857': { name: 'Eiffel Tower — Paris, France', type: 'eiffel' },
+'GWC-G-347028': { name: 'Great Wall of China', type: 'gwc' },
+};
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let currentLesson = null;
+let gwcPage = 0; // 0 = image 1, 1 = image 2
+let gl, canvas;
+let panoTex = null, panoTex2 = null;
+let fadeAlpha = 1; // 1 = fully showing current, fading to 0 then swap
+let fading = false, fadeDir = 0; // 1 = fading out, -1 = fading in
+let progPano, progUI, progModel;
+let sphVBO, sphIBO, sphCnt;
+let quadVBO;
+let navTex = null;
+let navHover = false, navGazeT = 0, navGazeP = 0;
+const NAV_GT = 1.8; // gaze time for nav
+let crossTex = null, gazeTex = null;
+let gzH2 = null;
+
+// Orientation
+let tPitch = 0, tYaw = 0, sPitch = 0, sYaw = 0;
+let gyOK2 = false, useOri2 = false;
+let curQ2 = [0,0,0,1], targetQ2 = [0,0,0,1], refQ2 = null;
+let dragging2 = false, dsx2 = 0, dsy2 = 0, dy02 = 0, dp02 = 0;
+let xrP2 = false;
+let prevTime = 0;
+
+// Eiffel tower model
+let etModelVBO = null, etModelCnt = 0;
+let etTexGl = null;
+let etRotation = 0;
+
+// FOV / IPD
+let vrFov = 90, vrIpd = 64;
+let isCB2 = true; // always cardboard for now
+
+// ═══════════════════════════════════════
+// MATH
+// ═══════════════════════════════════════
+function I(){return new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])}
+function persp(f,a,n,fa){const t=1/Math.tan(f/2),nf=1/(n-fa);return new Float32Array([t/a,0,0,0,0,t,0,0,0,0,(fa+n)*nf,-1,0,0,2*fa*n*nf,0])}
+function mmul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[k*4+j]*b[i*4+k];o[i*4+j]=s}return o}
+function trM(m,x,y,z){const t=I();t[12]=x;t[13]=y;t[14]=z;return mmul(m,t)}
+function scM(m,x,y,z){const s=I();s[0]=x;s[5]=y;s[10]=z;return mmul(m,s)}
+function rXM(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[5]=c;r[6]=s;r[9]=-s;r[10]=c;return mmul(m,r)}
+function rYM(m,a){const c=Math.cos(a),s=Math.sin(a),r=I();r[0]=c;r[2]=-s;r[8]=s;r[10]=c;return mmul(m,r)}
+function inv4(m){const i=new Float32Array(16);i[0]=m[5]*m[10]*m[15]-m[5]*m[11]*m[14]-m[9]*m[6]*m[15]+m[9]*m[7]*m[14]+m[13]*m[6]*m[11]-m[13]*m[7]*m[10];i[4]=-m[4]*m[10]*m[15]+m[4]*m[11]*m[14]+m[8]*m[6]*m[15]-m[8]*m[7]*m[14]-m[12]*m[6]*m[11]+m[12]*m[7]*m[10];i[8]=m[4]*m[9]*m[15]-m[4]*m[11]*m[13]-m[8]*m[5]*m[15]+m[8]*m[7]*m[13]+m[12]*m[5]*m[11]-m[12]*m[7]*m[9];i[12]=-m[4]*m[9]*m[14]+m[4]*m[10]*m[13]+m[8]*m[5]*m[14]-m[8]*m[6]*m[13]-m[12]*m[5]*m[10]+m[12]*m[6]*m[9];i[1]=-m[1]*m[10]*m[15]+m[1]*m[11]*m[14]+m[9]*m[2]*m[15]-m[9]*m[3]*m[14]-m[13]*m[2]*m[11]+m[13]*m[3]*m[10];i[5]=m[0]*m[10]*m[15]-m[0]*m[11]*m[14]-m[8]*m[2]*m[15]+m[8]*m[3]*m[14]+m[12]*m[2]*m[11]-m[12]*m[3]*m[10];i[9]=-m[0]*m[9]*m[15]+m[0]*m[11]*m[13]+m[8]*m[1]*m[15]-m[8]*m[3]*m[13]-m[12]*m[1]*m[11]+m[12]*m[3]*m[9];i[13]=m[0]*m[9]*m[14]-m[0]*m[10]*m[13]-m[8]*m[1]*m[14]+m[8]*m[2]*m[13]+m[12]*m[1]*m[10]-m[12]*m[2]*m[9];i[2]=m[1]*m[6]*m[15]-m[1]*m[7]*m[14]-m[5]*m[2]*m[15]+m[5]*m[3]*m[14]+m[13]*m[2]*m[7]-m[13]*m[3]*m[6];i[6]=-m[0]*m[6]*m[15]+m[0]*m[7]*m[14]+m[4]*m[2]*m[15]-m[4]*m[3]*m[14]-m[12]*m[2]*m[7]+m[12]*m[3]*m[6];i[10]=m[0]*m[5]*m[15]-m[0]*m[7]*m[13]-m[4]*m[1]*m[15]+m[4]*m[3]*m[13]+m[12]*m[1]*m[7]-m[12]*m[3]*m[5];i[14]=-m[0]*m[5]*m[14]+m[0]*m[6]*m[13]+m[4]*m[1]*m[14]-m[4]*m[2]*m[13]-m[12]*m[1]*m[6]+m[12]*m[2]*m[5];i[3]=-m[1]*m[6]*m[11]+m[1]*m[7]*m[10]+m[5]*m[2]*m[11]-m[5]*m[3]*m[10]-m[9]*m[2]*m[7]+m[9]*m[3]*m[6];i[7]=m[0]*m[6]*m[11]-m[0]*m[7]*m[10]-m[4]*m[2]*m[11]+m[4]*m[3]*m[10]+m[8]*m[2]*m[7]-m[8]*m[3]*m[6];i[11]=-m[0]*m[5]*m[11]+m[0]*m[7]*m[9]+m[4]*m[1]*m[11]-m[4]*m[3]*m[9]-m[8]*m[1]*m[7]+m[8]*m[3]*m[5];i[15]=m[0]*m[5]*m[10]-m[0]*m[6]*m[9]-m[4]*m[1]*m[10]+m[4]*m[2]*m[9]+m[8]*m[1]*m[6]-m[8]*m[2]*m[5];let d=m[0]*i[0]+m[1]*i[4]+m[2]*i[8]+m[3]*i[12];if(Math.abs(d)<1e-10)return I();d=1/d;for(let j=0;j<16;j++)i[j]*=d;return i}
+function lerp(a,b,t){return a+(b-a)*t}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function d2r(d){return d*Math.PI/180}
+
+function qAx(x,y,z,a){const s=Math.sin(a/2);return qN([x*s,y*s,z*s,Math.cos(a/2)])}
+function qM(a,b){return[a[3]*b[0]+a[0]*b[3]+a[1]*b[2]-a[2]*b[1],a[3]*b[1]-a[0]*b[2]+a[1]*b[3]+a[2]*b[0],a[3]*b[2]+a[0]*b[1]-a[1]*b[0]+a[2]*b[3],a[3]*b[3]-a[0]*b[0]-a[1]*b[1]-a[2]*b[2]]}
+function qC(q){return[-q[0],-q[1],-q[2],q[3]]}
+function qN(q){const l=Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3])||1;return[q[0]/l,q[1]/l,q[2]/l,q[3]/l]}
+function qFromEulerZXY(a,b,g){return qN(qM(qM(qAx(0,0,1,a),qAx(1,0,0,b)),qAx(0,1,0,g)))}
+function qToMat(q){const x=q[0],y=q[1],z=q[2],w=q[3],x2=x+x,y2=y+y,z2=z+z,xx=x*x2,xy=x*y2,xz=x*z2,yy=y*y2,yz=y*z2,zz=z*z2,wx=w*x2,wy=w*y2,wz=w*z2,m=new Float32Array(16);m[0]=1-yy-zz;m[1]=xy+wz;m[2]=xz-wy;m[4]=xy-wz;m[5]=1-xx-zz;m[6]=yz+wx;m[8]=xz+wy;m[9]=yz-wx;m[10]=1-xx-yy;m[15]=1;return m}
+function qSlerp(a,b,t){let dot=a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3];const b2=dot<0?[-b[0],-b[1],-b[2],-b[3]]:b.slice();if(dot<0)dot=-dot;if(dot>.9995)return qN([lerp(a[0],b2[0],t),lerp(a[1],b2[1],t),lerp(a[2],b2[2],t),lerp(a[3],b2[3],t)]);const th=Math.acos(clamp(dot,-1,1)),st=Math.sin(th);if(Math.abs(st)<1e-6)return a.slice();const sa=Math.sin((1-t)*th)/st,sb=Math.sin(t*th)/st;return qN([sa*a[0]+sb*b2[0],sa*a[1]+sb*b2[1],sa*a[2]+sb*b2[2],sa*a[3]+sb*b2[3]])}
+
+// ═══════════════════════════════════════
+// LOADING
+// ═══════════════════════════════════════
+async function loadAllAssets() {
+    const bar = document.getElementById('load-bar');
+    const status = document.getElementById('load-status');
+    const itemsDiv = document.getElementById('load-items');
+
+    const keys = Object.keys(ASSETS);
+    const total = keys.length;
+
+    // Create item list
+    keys.forEach(k => {
+        const div = document.createElement('div');
+        div.className = 'load-item';
+        div.id = 'li-' + k;
+        div.innerHTML = `<div class="dot"></div><span>${ASSETS[k].label}</span>`;
+        itemsDiv.appendChild(div);
+    });
+
+    let loaded = 0;
+
+    for (const k of keys) {
+        const asset = ASSETS[k];
+        const itemEl = document.getElementById('li-' + k);
+        itemEl.classList.add('active');
+        status.textContent = `Loading: ${asset.label}...`;
+
+        try {
+            if (asset.type === 'image') {
+                await new Promise((res, rej) => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.onload = () => { asset.img = img; res(); };
+                    img.onerror = () => {
+                        // Create placeholder
+                        const c = document.createElement('canvas'); c.width = 2048; c.height = 1024;
+                        const cx = c.getContext('2d');
+                        cx.fillStyle = '#1a1a3a'; cx.fillRect(0, 0, 2048, 1024);
+                        cx.fillStyle = '#fff'; cx.font = '40px sans-serif'; cx.textAlign = 'center';
+                        cx.fillText(asset.label, 1024, 512);
+                        asset.img = c; res();
+                    };
+                    img.src = asset.url;
+                });
+            } else if (asset.type === 'obj') {
+                const resp = await fetch(asset.url);
+                if (!resp.ok) throw new Error('fetch failed');
+                asset.data = await resp.text();
+            }
+        } catch (e) {
+            console.warn('Failed to load', k, e);
+            if (asset.type === 'obj') asset.data = null;
+        }
+
+        itemEl.classList.remove('active');
+        itemEl.classList.add('done');
+        loaded++;
+        bar.style.width = (loaded / total * 100) + '%';
+    }
+
+    status.textContent = 'All assets loaded! Starting scanner...';
+    bar.style.width = '100%';
+    await new Promise(r => setTimeout(r, 800));
+}
+
+// ═══════════════════════════════════════
+// QR SCANNER
+// ═══════════════════════════════════════
+let scannerStream = null;
+let jsQRLoaded = false;
+let scanCanvas = null, scanCtx = null;
+let scanning = false;
+
+async function loadJsQR() {
+    return new Promise((res) => {
+        if (window.jsQR) { jsQRLoaded = true; res(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js';
+        s.onload = () => { jsQRLoaded = true; res(); };
+        s.onerror = () => { res(); }; // continue without
+        document.head.appendChild(s);
+    });
+}
+
+async function startScanner() {
+    const loadScreen = document.getElementById('loading-screen');
+    loadScreen.style.opacity = '0';
+    setTimeout(() => { loadScreen.style.display = 'none'; }, 500);
+
+    const scanScreen = document.getElementById('scanner-screen');
+    scanScreen.style.display = 'flex';
+
+    const video = document.getElementById('scanner-video');
+    scanCanvas = document.createElement('canvas');
+    scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
+
+    try {
+        scannerStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        video.srcObject = scannerStream;
+        await video.play();
+    } catch (e) {
+        try {
+            scannerStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            video.srcObject = scannerStream;
+            await video.play();
+        } catch (e2) {
+            console.warn('Camera failed', e2);
+        }
+    }
+
+    scanning = true;
+    scanLoop();
+}
+
+function scanLoop() {
+    if (!scanning) return;
+    const video = document.getElementById('scanner-video');
+    if (video.readyState >= 2 && jsQRLoaded && window.jsQR) {
+        scanCanvas.width = video.videoWidth;
+        scanCanvas.height = video.videoHeight;
+        scanCtx.drawImage(video, 0, 0);
+        const imageData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+        const code = jsQR(imageData.data, scanCanvas.width, scanCanvas.height, { inversionAttempts: 'dontInvert' });
+        if (code && code.data) {
+            const trimmed = code.data.trim().toUpperCase();
+            if (LESSONS[trimmed]) {
+                processCode(trimmed);
+                return;
+            }
+        }
+    }
+    requestAnimationFrame(scanLoop);
+}
+
+function stopScanner() {
+    scanning = false;
+    if (scannerStream) {
+        scannerStream.getTracks().forEach(t => t.stop());
+        scannerStream = null;
+    }
+    document.getElementById('scanner-screen').style.display = 'none';
+}
+
+function processCode(code) {
+    stopScanner();
+    currentLesson = LESSONS[code];
+    if (!currentLesson) return;
+
+    if (currentLesson.type === 'gwc') {
+        gwcPage = 0;
+    }
+
+    showEnterVR();
+}
+
+function showEnterVR() {
+    const overlay = document.getElementById('enter-vr-overlay');
+    overlay.style.display = 'flex';
+    overlay.addEventListener('click', () => {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            startVR();
+        }, 400);
+    }, { once: true });
+}
+
+// ═══════════════════════════════════════
+// MANUAL INPUT
+// ═══════════════════════════════════════
+function setupManualInput() {
+    document.getElementById('btn-manual').addEventListener('click', () => {
+        document.getElementById('manual-input').style.display = 'flex';
+    });
+    document.getElementById('btn-back').addEventListener('click', () => {
+        document.getElementById('manual-input').style.display = 'none';
+    });
+    document.getElementById('btn-submit').addEventListener('click', () => {
+        const val = document.getElementById('code-input').value.trim().toUpperCase();
+        if (LESSONS[val]) {
+            document.getElementById('manual-input').style.display = 'none';
+            processCode(val);
+        } else {
+            document.getElementById('code-input').style.borderColor = 'rgba(255,50,50,.8)';
+            setTimeout(() => { document.getElementById('code-input').style.borderColor = 'rgba(0,180,255,.4)'; }, 1500);
+        }
+    });
+    document.getElementById('code-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') document.getElementById('btn-submit').click();
+    });
+}
+
+// ═══════════════════════════════════════
+// GL SETUP
+// ═══════════════════════════════════════
+function mkS(t, s) { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); return sh; }
+function mkP(v, f) { const p = gl.createProgram(); gl.attachShader(p, mkS(gl.VERTEX_SHADER, v)); gl.attachShader(p, mkS(gl.FRAGMENT_SHADER, f)); gl.linkProgram(p); return p; }
+function sTP(t) { gl.texParameteri(t, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(t, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); gl.texParameteri(t, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(t, gl.TEXTURE_MAG_FILTER, gl.LINEAR); }
+function mT(s) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, s); sTP(gl.TEXTURE_2D); return t; }
+function uT(t, s) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, s); }
+
+const VP_PANO = `attribute vec3 aP;attribute vec2 aT;uniform mat4 uP,uV;varying vec2 vT;void main(){gl_Position=uP*uV*vec4(aP,1.0);vT=aT;}`;
+const FP_PANO = `precision mediump float;varying vec2 vT;uniform sampler2D uTx;uniform float uAlpha;void main(){vec4 c=texture2D(uTx,vT);gl_FragColor=vec4(c.rgb,c.a*uAlpha);}`;
+
+const VP_UI = `attribute vec3 aP;attribute vec2 aT;uniform mat4 uM;varying vec2 vT;void main(){gl_Position=uM*vec4(aP,1.0);vT=aT;}`;
+const FP_UI = `precision mediump float;varying vec2 vT;uniform sampler2D uTx;uniform float uA;void main(){vec4 c=texture2D(uTx,vT);gl_FragColor=vec4(c.rgb,c.a*uA);}`;
+
+const VP_MODEL = `attribute vec3 aP;attribute vec2 aT;attribute vec3 aN;uniform mat4 uMVP;varying vec2 vT;varying vec3 vN;void main(){gl_Position=uMVP*vec4(aP,1.0);vT=aT;vN=aN;}`;
+const FP_MODEL = `precision mediump float;varying vec2 vT;varying vec3 vN;uniform sampler2D uTx;void main(){vec3 n=normalize(vN);float light=max(dot(n,normalize(vec3(0.5,1.0,0.3))),0.0)*0.7+0.3;vec4 c=texture2D(uTx,vT);gl_FragColor=vec4(c.rgb*light,1.0);}`;
+
+const QVD = new Float32Array([-.5, -.5, 0, 0, 1, .5, -.5, 0, 1, 1, .5, .5, 0, 1, 0, -.5, -.5, 0, 0, 1, .5, .5, 0, 1, 0, -.5, .5, 0, 0, 0]);
+
+function buildSph(la, lo, R) {
+    const v = [], idx = [];
+    for (let i = 0; i <= la; i++) {
+        const th = i * Math.PI / la, st = Math.sin(th), ct = Math.cos(th);
+        for (let j = 0; j <= lo; j++) {
+            const ph = j * 2 * Math.PI / lo;
+            v.push(R * Math.cos(ph) * st, R * ct, R * Math.sin(ph) * st, 1 - j / lo, i / la);
+        }
+    }
+    for (let i = 0; i < la; i++) for (let j = 0; j < lo; j++) {
+        const a = i * (lo + 1) + j, b = a + lo + 1;
+        idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+    sphVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, sphVBO); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+    sphIBO = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphIBO); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW);
+    sphCnt = idx.length;
+}
+
+function parseOBJ(text) {
+    if (!text) return null;
+    const positions = [], texcoords = [], normals = [];
+    const verts = [];
+    const lines = text.split('\n');
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts[0] === 'v') {
+            positions.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+        } else if (parts[0] === 'vt') {
+            texcoords.push([parseFloat(parts[1]), parseFloat(parts[2])]);
+        } else if (parts[0] === 'vn') {
+            normals.push([parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])]);
+        } else if (parts[0] === 'f') {
+            const face = [];
+            for (let i = 1; i < parts.length; i++) {
+                const indices = parts[i].split('/');
+                const vi = parseInt(indices[0]) - 1;
+                const ti = indices[1] ? parseInt(indices[1]) - 1 : -1;
+                const ni = indices[2] ? parseInt(indices[2]) - 1 : -1;
+                face.push({ vi, ti, ni });
+            }
+            // Triangulate
+            for (let i = 1; i < face.length - 1; i++) {
+                [face[0], face[i], face[i + 1]].forEach(f => {
+                    const p = positions[f.vi] || [0, 0, 0];
+                    const t = f.ti >= 0 && texcoords[f.ti] ? texcoords[f.ti] : [0, 0];
+                    const n = f.ni >= 0 && normals[f.ni] ? normals[f.ni] : [0, 1, 0];
+                    verts.push(p[0], p[1], p[2], t[0], t[1], n[0], n[1], n[2]);
+                });
+            }
+        }
+    }
+    return new Float32Array(verts);
+}
+
+function buildNavButton() {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    const x = c.getContext('2d');
+
+    // Background
+    const hp = navHover ? 1 : 0;
+    x.fillStyle = `rgba(0,40,80,${0.6 + hp * 0.2})`;
+    x.beginPath(); x.moveTo(20, 0); x.lineTo(492, 0); x.quadraticCurveTo(512, 0, 512, 20);
+    x.lineTo(512, 236); x.quadraticCurveTo(512, 256, 492, 256); x.lineTo(20, 256);
+    x.quadraticCurveTo(0, 256, 0, 236); x.lineTo(0, 20); x.quadraticCurveTo(0, 0, 20, 0); x.closePath(); x.fill();
+
+    x.strokeStyle = `rgba(0,180,255,${0.4 + hp * 0.4})`;
+    x.lineWidth = 3;
+    x.beginPath(); x.moveTo(20, 0); x.lineTo(492, 0); x.quadraticCurveTo(512, 0, 512, 20);
+    x.lineTo(512, 236); x.quadraticCurveTo(512, 256, 492, 256); x.lineTo(20, 256);
+    x.quadraticCurveTo(0, 256, 0, 236); x.lineTo(0, 20); x.quadraticCurveTo(0, 0, 20, 0); x.closePath(); x.stroke();
+
+    // Arrow
+    x.fillStyle = '#fff';
+    x.font = 'bold 80px sans-serif';
+    x.textAlign = 'center';
+    x.fillText('▶', 200, 160);
+
+    // Text
+    x.font = 'bold 28px sans-serif';
+    x.fillText('Next View', 360, 145);
+
+    // Progress arc if gazing
+    if (navGazeP > 0) {
+        x.strokeStyle = 'rgba(0,200,255,0.9)';
+        x.lineWidth = 6;
+        x.lineCap = 'round';
+        x.beginPath();
+        x.arc(200, 128, 55, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * navGazeP);
+        x.stroke();
+    }
+
+    if (navTex) uT(navTex, c);
+    else navTex = mT(c);
+}
+
+function buildCrosshair() {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+    const x = c.getContext('2d');
+    x.strokeStyle = 'rgba(255,255,255,0.5)'; x.lineWidth = 2.5;
+    x.beginPath(); x.arc(128, 128, 40, 0, Math.PI * 2); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,0.25)'; x.lineWidth = 1.5;
+    x.beginPath(); x.arc(128, 128, 20, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = 'rgba(255,255,255,0.8)'; x.beginPath(); x.arc(128, 128, 4, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = 'rgba(255,255,255,0.3)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(128, 80); x.lineTo(128, 96); x.stroke();
+    x.beginPath(); x.moveTo(128, 160); x.lineTo(128, 176); x.stroke();
+    x.beginPath(); x.moveTo(80, 128); x.lineTo(96, 128); x.stroke();
+    x.beginPath(); x.moveTo(160, 128); x.lineTo(176, 128); x.stroke();
+    crossTex = mT(c);
+}
+
+function buildGazeCross(p) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+    const x = c.getContext('2d');
+    x.strokeStyle = 'rgba(255,255,255,0.1)'; x.lineWidth = 4;
+    x.beginPath(); x.arc(128, 128, 50, 0, Math.PI * 2); x.stroke();
+    if (p > 0) {
+        x.strokeStyle = 'rgba(0,180,255,0.9)'; x.lineWidth = 4; x.lineCap = 'round';
+        x.beginPath(); x.arc(128, 128, 50, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p); x.stroke();
+        x.strokeStyle = 'rgba(0,180,255,0.3)'; x.lineWidth = 8;
+        x.beginPath(); x.arc(128, 128, 50, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p); x.stroke();
+    }
+    x.strokeStyle = 'rgba(255,255,255,0.25)'; x.lineWidth = 1.5;
+    x.beginPath(); x.arc(128, 128, 20, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = 'rgba(255,255,255,0.8)'; x.beginPath(); x.arc(128, 128, 4, 0, Math.PI * 2); x.fill();
+    if (gazeTex) uT(gazeTex, c); else gazeTex = mT(c);
+}
+
+// ═══════════════════════════════════════
+// ORIENTATION
+// ═══════════════════════════════════════
+function initOrientation2() {
+    const handler = e => {
+        if (e.alpha === null) return; gyOK2 = true;
+        let q = qFromEulerZXY(d2r(e.alpha || 0), d2r(e.beta || 0), d2r(e.gamma || 0));
+        let sa = 0;
+        if (screen.orientation) sa = screen.orientation.angle || 0;
+        else if (typeof window.orientation === 'number') sa = window.orientation;
+        if (sa) q = qM(q, qAx(0, 0, 1, d2r(-sa)));
+        if (!refQ2) refQ2 = qC(q);
+        targetQ2 = qM(refQ2, q);
+    };
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function')
+        DeviceOrientationEvent.requestPermission().then(r => { if (r === 'granted') { window.addEventListener('deviceorientation', handler, true); useOri2 = true; } }).catch(() => {});
+    else { window.addEventListener('deviceorientation', handler, true); useOri2 = true; }
+}
+
+function getView() {
+    if (gyOK2 && useOri2) {
+        curQ2 = qSlerp(curQ2, targetQ2, 0.35);
+        return qToMat(qC(curQ2));
+    }
+    sPitch += (tPitch - sPitch) * .3;
+    sYaw += (tYaw - sYaw) * .3;
+    let vm = I();
+    vm = rXM(vm, sPitch);
+    vm = rYM(vm, sYaw);
+    return vm;
+}
+
+// ═══════════════════════════════════════
+// VR RENDERING
+// ═══════════════════════════════════════
+function startVR() {
+    document.getElementById('vr-container').style.display = 'block';
+    canvas = document.getElementById('vr-canvas');
+    canvas.width = innerWidth * devicePixelRatio;
+    canvas.height = innerHeight * devicePixelRatio;
+    gl = canvas.getContext('webgl', { antialias: true, alpha: false, depth: true });
+    if (!gl) { alert('WebGL not supported'); return; }
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    // Programs
+    progPano = mkP(VP_PANO, FP_PANO);
+    progPano._aP = gl.getAttribLocation(progPano, 'aP');
+    progPano._aT = gl.getAttribLocation(progPano, 'aT');
+    progPano._uP = gl.getUniformLocation(progPano, 'uP');
+    progPano._uV = gl.getUniformLocation(progPano, 'uV');
+    progPano._uT = gl.getUniformLocation(progPano, 'uTx');
+    progPano._uAlpha = gl.getUniformLocation(progPano, 'uAlpha');
+
+    progUI = mkP(VP_UI, FP_UI);
+    progUI._aP = gl.getAttribLocation(progUI, 'aP');
+    progUI._aT = gl.getAttribLocation(progUI, 'aT');
+    progUI._uM = gl.getUniformLocation(progUI, 'uM');
+    progUI._uT = gl.getUniformLocation(progUI, 'uTx');
+    progUI._uA = gl.getUniformLocation(progUI, 'uA');
+
+    progModel = mkP(VP_MODEL, FP_MODEL);
+    progModel._aP = gl.getAttribLocation(progModel, 'aP');
+    progModel._aT = gl.getAttribLocation(progModel, 'aT');
+    progModel._aN = gl.getAttribLocation(progModel, 'aN');
+    progModel._uMVP = gl.getUniformLocation(progModel, 'uMVP');
+    progModel._uT = gl.getUniformLocation(progModel, 'uTx');
+
+    buildSph(32, 32, 50);
+    quadVBO = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO); gl.bufferData(gl.ARRAY_BUFFER, QVD, gl.STATIC_DRAW);
+
+    // Load textures based on lesson
+    if (currentLesson.type === 'gwc') {
+        panoTex = mT(ASSETS.gwc1.img);
+        panoTex2 = mT(ASSETS.gwc2.img);
+    } else if (currentLesson.type === 'eiffel') {
+        // Use eiffel texture as panoramic background
+        panoTex = mT(ASSETS.etTex.img);
+        // Parse and build OBJ model
+        if (ASSETS.etObj.data) {
+            const modelData = parseOBJ(ASSETS.etObj.data);
+            if (modelData && modelData.length > 0) {
+                etModelVBO = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, etModelVBO);
+                gl.bufferData(gl.ARRAY_BUFFER, modelData, gl.STATIC_DRAW);
+                etModelCnt = modelData.length / 8;
+                etTexGl = mT(ASSETS.etTex.img);
+            }
+        }
+    }
+
+    buildCrosshair();
+    buildGazeCross(0);
+    buildNavButton();
+
+    goFS();
+    initOrientation2();
+    initTouch2();
+
+    prevTime = performance.now();
+    requestAnimationFrame(vrLoop);
+}
+
+function goFS() {
+    const el = document.documentElement;
+    const r = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+    if (r) r.call(el).catch(() => {});
+    try { screen.orientation.lock('landscape-primary').catch(() => {}); } catch (e) {}
+}
+
+function initTouch2() {
+    canvas.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) { dragging2 = true; dsx2 = e.touches[0].clientX; dsy2 = e.touches[0].clientY; dy02 = tYaw; dp02 = tPitch; }
+        e.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener('touchmove', e => {
+        if (dragging2 && !gyOK2 && e.touches.length === 1) {
+            tYaw = dy02 + (e.touches[0].clientX - dsx2) * .004;
+            tPitch = dp02 - (e.touches[0].clientY - dsy2) * .004;
+            tPitch = clamp(tPitch, -1.4, 1.4);
+        }
+        e.preventDefault();
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => {
+        dragging2 = false;
+        if (gyOK2) { xrP2 = true; setTimeout(() => { xrP2 = false; }, 100); }
+    });
+    canvas.addEventListener('mousedown', e => { dragging2 = true; dsx2 = e.clientX; dsy2 = e.clientY; dy02 = tYaw; dp02 = tPitch; });
+    window.addEventListener('mousemove', e => {
+        if (dragging2 && !gyOK2) {
+            tYaw = dy02 + (e.clientX - dsx2) * .004;
+            tPitch = dp02 - (e.clientY - dsy2) * .004;
+            tPitch = clamp(tPitch, -1.4, 1.4);
+        }
+    });
+    window.addEventListener('mouseup', () => { dragging2 = false; });
+    window.addEventListener('resize', () => {
+        if (canvas) { canvas.width = innerWidth * devicePixelRatio; canvas.height = innerHeight * devicePixelRatio; }
+    });
+}
+
+function drawPano(proj, view, tex, alpha) {
+    if (!tex) return;
+    gl.useProgram(progPano);
+    gl.bindBuffer(gl.ARRAY_BUFFER, sphVBO);
+    gl.enableVertexAttribArray(progPano._aP);
+    gl.vertexAttribPointer(progPano._aP, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(progPano._aT);
+    gl.vertexAttribPointer(progPano._aT, 2, gl.FLOAT, false, 20, 12);
+    gl.uniformMatrix4fv(progPano._uP, false, proj);
+    gl.uniformMatrix4fv(progPano._uV, false, view);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(progPano._uT, 0);
+    gl.uniform1f(progPano._uAlpha, alpha);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphIBO);
+    gl.drawElements(gl.TRIANGLES, sphCnt, gl.UNSIGNED_SHORT, 0);
+}
+
+function drawQuad(proj, view, pos, w, h, tex, alpha) {
+    if (!tex) return;
+    gl.useProgram(progUI);
+    let m = I();
+    m = trM(m, pos[0], pos[1], pos[2]);
+    // Billboard
+    const iv = inv4(view);
+    const br = new Float32Array(16);
+    br.set(iv); br[12] = 0; br[13] = 0; br[14] = 0; br[15] = 1;
+    m = mmul(m, br);
+    m = scM(m, w, h, 1);
+    const mvp = mmul(proj, mmul(view, m));
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+    gl.enableVertexAttribArray(progUI._aP);
+    gl.vertexAttribPointer(progUI._aP, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(progUI._aT);
+    gl.vertexAttribPointer(progUI._aT, 2, gl.FLOAT, false, 20, 12);
+    gl.uniformMatrix4fv(progUI._uM, false, mvp);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(progUI._uT, 0);
+    gl.uniform1f(progUI._uA, alpha);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+}
+
+function drawQuadFixed(proj, view, pos, w, h, tex, alpha) {
+    if (!tex) return;
+    gl.useProgram(progUI);
+    let m = I();
+    m = trM(m, pos[0], pos[1], pos[2]);
+    m = scM(m, w, h, 1);
+    const mvp = mmul(proj, mmul(view, m));
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+    gl.enableVertexAttribArray(progUI._aP);
+    gl.vertexAttribPointer(progUI._aP, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(progUI._aT);
+    gl.vertexAttribPointer(progUI._aT, 2, gl.FLOAT, false, 20, 12);
+    gl.uniformMatrix4fv(progUI._uM, false, mvp);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(progUI._uT, 0);
+    gl.uniform1f(progUI._uA, alpha);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+}
+
+function drawModel(proj, view) {
+    if (!etModelVBO || !etTexGl || etModelCnt === 0) return;
+    gl.useProgram(progModel);
+    let model = I();
+    // Scale down and position
+    model = trM(model, 0, -15, -30);
+    model = scM(model, 0.05, 0.05, 0.05);
+    // Rotate slowly
+    const rotM = I();
+    const c = Math.cos(etRotation), s = Math.sin(etRotation);
+    rotM[0] = c; rotM[2] = -s; rotM[8] = s; rotM[10] = c;
+    model = mmul(model, rotM);
+
+    const mvp = mmul(proj, mmul(view, model));
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, etModelVBO);
+    gl.enableVertexAttribArray(progModel._aP);
+    gl.vertexAttribPointer(progModel._aP, 3, gl.FLOAT, false, 32, 0);
+    gl.enableVertexAttribArray(progModel._aT);
+    gl.vertexAttribPointer(progModel._aT, 2, gl.FLOAT, false, 32, 12);
+    gl.enableVertexAttribArray(progModel._aN);
+    gl.vertexAttribPointer(progModel._aN, 3, gl.FLOAT, false, 32, 20);
+    gl.uniformMatrix4fv(progModel._uMVP, false, mvp);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, etTexGl);
+    gl.uniform1i(progModel._uT, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, etModelCnt);
+}
+
+function hitQuad(o, d, p, w, h) {
+    if (Math.abs(d[2]) < .001) return false;
+    const t = (p[2] - o[2]) / d[2];
+    if (t < 0) return false;
+    const hx = o[0] + d[0] * t, hy = o[1] + d[1] * t;
+    return hx >= p[0] - w / 2 && hx <= p[0] + w / 2 && hy >= p[1] - h / 2 && hy <= p[1] + h / 2;
+}
+
+function renderScene(proj, view) {
+    // Pano
+    gl.disable(gl.DEPTH_TEST);
+
+    if (currentLesson.type === 'gwc') {
+        if (gwcPage === 0) {
+            drawPano(proj, view, panoTex, fadeAlpha);
+            if (fadeAlpha < 1) drawPano(proj, view, panoTex2, 1 - fadeAlpha);
+        } else {
+            drawPano(proj, view, panoTex2, fadeAlpha);
+            if (fadeAlpha < 1) drawPano(proj, view, panoTex, 1 - fadeAlpha);
+        }
+    } else {
+        drawPano(proj, view, panoTex, 1);
+    }
+
+    gl.enable(gl.DEPTH_TEST);
+
+    // Eiffel tower model
+    if (currentLesson.type === 'eiffel') {
+        drawModel(proj, view);
+    }
+
+    // Nav button for GWC
+    if (currentLesson.type === 'gwc' && !fading) {
+        gl.disable(gl.DEPTH_TEST);
+        drawQuadFixed(proj, view, [0, -2.5, -5], 3.5, 1.8, navTex, 0.95);
+        gl.enable(gl.DEPTH_TEST);
+    }
+
+    // Crosshair
+    gl.disable(gl.DEPTH_TEST);
+    const iv = inv4(view), ep = [iv[12], iv[13], iv[14]], fw = [-iv[8], -iv[9], -iv[10]];
+    const crossSize = gzH2 ? 0.45 : 0.3;
+    drawQuad(proj, view, [ep[0] + fw[0] * 5, ep[1] + fw[1] * 5, ep[2] + fw[2] * 5], crossSize, crossSize, gzH2 ? gazeTex : crossTex, 1);
+    gl.enable(gl.DEPTH_TEST);
+}
+
+function vrLoop(time) {
+    requestAnimationFrame(vrLoop);
+    const dt = Math.min((time - prevTime) / 1000, 0.1);
+    prevTime = time;
+
+    // Eiffel rotation
+    if (currentLesson && currentLesson.type === 'eiffel') {
+        etRotation += dt * 0.3;
+    }
+
+    // Fade logic
+    if (fading) {
+        if (fadeDir === 1) {
+            fadeAlpha -= dt * 1.5;
+            if (fadeAlpha <= 0) {
+                fadeAlpha = 0;
+                gwcPage = gwcPage === 0 ? 1 : 0;
+                fadeDir = -1;
+            }
+        } else if (fadeDir === -1) {
+            fadeAlpha += dt * 1.5;
+            if (fadeAlpha >= 1) {
+                fadeAlpha = 1;
+                fading = false;
+                fadeDir = 0;
+                buildNavButton();
+            }
+        }
+    }
+
+    const cw = Math.floor(canvas.clientWidth * devicePixelRatio), ch = Math.floor(canvas.clientHeight * devicePixelRatio);
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+
+    const vm = getView();
+    const iv = inv4(vm), go = [iv[12], iv[13], iv[14]], gd = [-iv[8], -iv[9], -iv[10]];
+
+    // Gaze / interaction for GWC nav
+    if (currentLesson && currentLesson.type === 'gwc' && !fading) {
+        const navPos = [0, -2.5, -5];
+        const isHit = hitQuad(go, gd, navPos, 3.5, 1.8);
+
+        if (isHit) {
+            if (!navHover) { navHover = true; buildNavButton(); }
+            navGazeT += dt;
+            navGazeP = Math.min(navGazeT / NAV_GT, 1);
+            gzH2 = 'nav';
+            if (navGazeT >= NAV_GT) {
+                // Trigger navigation
+                fading = true;
+                fadeDir = 1;
+                navGazeT = 0;
+                navGazeP = 0;
+                gzH2 = null;
+                navHover = false;
+            }
+            buildNavButton();
+            buildGazeCross(navGazeP);
+        } else {
+            if (navHover) { navHover = false; buildNavButton(); }
+            if (navGazeT > 0) { navGazeT = 0; navGazeP = 0; buildNavButton(); }
+            gzH2 = null;
+        }
+
+        // Tap/click triggers instantly
+        if (xrP2 && isHit) {
+            fading = true;
+            fadeDir = 1;
+            navGazeT = 0;
+            navGazeP = 0;
+            gzH2 = null;
+            xrP2 = false;
+        }
+    } else {
+        gzH2 = null;
+    }
+    if (!gzH2) buildGazeCross(0);
+
+    xrP2 = false;
+
+    const fr = vrFov * Math.PI / 180, ipm = vrIpd / 1000;
+    const hw = Math.floor(canvas.width / 2), asp = hw / canvas.height;
+    const proj = persp(fr, asp, 0.1, 200);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // Left eye
+    gl.viewport(0, 0, hw, canvas.height);
+    renderScene(proj, mmul(vm, trM(I(), ipm * 0.5, 0, 0)));
+
+    // Right eye
+    gl.viewport(hw, 0, hw, canvas.height);
+    renderScene(proj, mmul(vm, trM(I(), -ipm * 0.5, 0, 0)));
+
+    // Divider
+    gl.disable(gl.DEPTH_TEST);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(hw - 1, 0, 2, canvas.height);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.enable(gl.DEPTH_TEST);
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+async function init() {
+    setupManualInput();
+    await loadJsQR();
+    await loadAllAssets();
+    await startScanner();
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
