@@ -8,7 +8,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:#e0e0e0;overflow-x:hidden}
 
-.login-screen{position:fixed;inset:0;z-index:1000;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s}
+.login-screen{position:fixed;inset:0;z-index:1000;background:linear-gradient(140deg,#050518,#0a0a3a,#050518);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .3s}
 .login-logo{font-size:48px;margin-bottom:16px}
 .login-title{font-size:28px;font-weight:800;margin-bottom:4px;background:linear-gradient(90deg,#00b4ff,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .login-sub{font-size:13px;opacity:.4;margin-bottom:32px}
@@ -20,9 +20,10 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 .login-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,100,255,.3)}
 .login-btn:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
 .login-hint{margin-top:16px;font-size:11px;opacity:.3}
+.login-status{margin-top:10px;font-size:12px;opacity:.5;min-height:18px}
 
 .dashboard{display:none;min-height:100vh;padding:20px}
-.dash-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;margin-bottom:20px}
+.dash-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;margin-bottom:20px;flex-wrap:wrap;gap:10px}
 .dash-header-left{display:flex;align-items:center;gap:16px}
 .dash-header-left .logo{font-size:28px}
 .dash-header-left .title{font-size:18px;font-weight:700}
@@ -43,8 +44,8 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 .feed-header .label{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
 .feed-header .label .dot{width:8px;height:8px;border-radius:50%;background:#ff4444;animation:pulse-live 1s infinite}
 .feed-header .fps{font-size:10px;opacity:.3;font-family:monospace}
-.feed-img-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center}
-.feed-img-wrap img{width:100%;height:100%;object-fit:contain}
+.feed-img-wrap{position:relative;width:100%;aspect-ratio:16/9;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.feed-img-wrap img{width:100%;height:100%;object-fit:contain;image-rendering:auto}
 .feed-img-wrap .no-feed{color:rgba(255,255,255,.2);font-size:14px}
 .feed-overlay{position:absolute;top:8px;left:8px;display:flex;gap:6px}
 .feed-overlay .tag{padding:3px 8px;border-radius:4px;font-size:9px;font-weight:600;background:rgba(0,0,0,.6)}
@@ -52,6 +53,17 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 .feed-ended-overlay .ico{font-size:40px}
 .feed-ended-overlay .msg{font-size:16px;font-weight:700}
 .feed-ended-overlay .sub{font-size:11px;opacity:.4}
+
+.notif-bar{margin-top:16px}
+.notif-card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden}
+.notif-card .card-header{padding:10px 16px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+.notif-form{padding:12px 16px;display:flex;gap:8px}
+.notif-form input{flex:1;padding:10px 14px;font-size:13px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;outline:none}
+.notif-form input:focus{border-color:rgba(0,180,255,.5)}
+.notif-form button{padding:10px 20px;font-size:12px;font-weight:700;background:linear-gradient(135deg,#0066ff,#7c3aed);border:none;border-radius:8px;color:#fff;cursor:pointer;white-space:nowrap;transition:opacity .15s}
+.notif-form button:hover{opacity:.85}
+.notif-form button:disabled{opacity:.3;cursor:not-allowed}
+.notif-sent{padding:8px 16px;font-size:11px;color:#00cc66;display:none}
 
 .sidebar{display:flex;flex-direction:column;gap:16px}
 .card{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden}
@@ -67,11 +79,11 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 .data-row .value.good{color:#00cc66}
 
 .warnings-container{display:flex;flex-direction:column;gap:8px}
-.warning-bar{padding:10px 14px;border-radius:10px;font-size:11px;display:flex;align-items:center;gap:8px;animation:slideIn .3s}
+.warning-bar{padding:10px 14px;border-radius:10px;font-size:11px;display:flex;align-items:flex-start;gap:8px;animation:slideIn .3s}
 @keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
 .warning-bar.caution{background:rgba(255,180,0,.1);border:1px solid rgba(255,180,0,.2);color:#ffb400}
 .warning-bar.danger{background:rgba(255,50,50,.1);border:1px solid rgba(255,50,50,.2);color:#ff4444}
-.warning-bar .ico{font-size:18px}
+.warning-bar .ico{font-size:18px;flex-shrink:0}
 .warning-bar .text{flex:1}
 .warning-bar .text strong{display:block;font-size:12px;margin-bottom:2px}
 
@@ -94,6 +106,7 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 <input class="login-input" id="session-input" type="text" placeholder="000000" maxlength="6" autocomplete="off" spellcheck="false">
 <button class="login-btn" id="connect-btn" disabled>Connect to Session</button>
 <div class="login-hint">Enter the 6-digit session PIN from the student's VR device</div>
+<div class="login-status" id="login-status"></div>
 </div>
 
 <div class="dashboard" id="dashboard">
@@ -112,7 +125,7 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 <div>
 <div class="feed-container">
 <div class="feed-header">
-<div class="label"><div class="dot" id="live-dot"></div> <span id="feed-label">Live Feed</span></div>
+<div class="label"><div class="dot" id="live-dot"></div><span id="feed-label">Live Feed</span></div>
 <div class="fps" id="feed-fps">-- fps</div>
 </div>
 <div class="feed-img-wrap">
@@ -127,6 +140,17 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 <div class="msg">VR Stream Finished</div>
 <div class="sub">The student has ended their VR session</div>
 </div>
+</div>
+</div>
+
+<div class="notif-bar">
+<div class="notif-card">
+<div class="card-header">📨 Send Notification to Student</div>
+<div class="notif-form">
+<input type="text" id="notif-input" placeholder="Type a message to send..." maxlength="200">
+<button id="notif-send-btn" disabled>Send</button>
+</div>
+<div class="notif-sent" id="notif-sent">✅ Notification sent successfully!</div>
 </div>
 </div>
 
@@ -166,12 +190,12 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 <div class="data-row"><div class="label">🕐 Lesson Started</div><div class="value" id="d-lesson-started">--</div></div>
 <div class="data-row"><div class="label">⏳ Time in Lesson</div><div class="value" id="d-lesson-time">--</div></div>
 <div class="data-row"><div class="label">👁️ Current View</div><div class="value" id="d-current-view">--</div></div>
-<div class="data-row"><div class="label">🖥️ Resolution</div><div class="value" id="d-resolution">--</div></div>
-<div class="data-row"><div class="label">🎞️ Frame Count</div><div class="value" id="d-frame-count">--</div></div>
-<div class="data-row"><div class="label">📊 Frame Rate</div><div class="value" id="d-fps">--</div></div>
+<div class="data-row"><div class="label">🖥️ Feed Resolution</div><div class="value" id="d-resolution">--</div></div>
+<div class="data-row"><div class="label">🎞️ Total Frames</div><div class="value" id="d-frame-count">--</div></div>
+<div class="data-row"><div class="label">📊 Stream FPS</div><div class="value" id="d-fps">--</div></div>
 <div class="data-row"><div class="label">📱 Device</div><div class="value" id="d-device">--</div></div>
 <div class="data-row"><div class="label">📐 Screen Size</div><div class="value" id="d-screen">--</div></div>
-<div class="data-row"><div class="label">🔄 Last Updated</div><div class="value" id="d-last-update">--</div></div>
+<div class="data-row"><div class="label">🔄 Last Update</div><div class="value" id="d-last-update">--</div></div>
 </div>
 </div>
 
@@ -182,33 +206,30 @@ html,body{width:100%;height:100%;background:#0a0a1a;font-family:system-ui,-apple
 
 <script type="module">
 import{initializeApp}from"https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
-import{getDatabase,ref,onValue,off}from"https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+import{getDatabase,ref,onValue,off,get,set,remove}from"https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
 const firebaseConfig={
-apiKey:"AIzaSyDY8-iGfATNeoZ7OxdnfVZ634fiqZdUrWs",
-authDomain:"uukr-d4caa.firebaseapp.com",
-databaseURL:"https://uukr-d4caa-default-rtdb.asia-southeast1.firebasedatabase.app",
-projectId:"uukr-d4caa",
-storageBucket:"uukr-d4caa.firebasestorage.app",
-messagingSenderId:"1032747716244",
-appId:"1:1032747716244:web:1bd0a19c0ebc0ea879ee81",
-measurementId:"G-E740HW5LCS"
+apiKey:"AIzaSyB1vznAg4HGLX25VRluOzhmPDQD9I1aHy0",
+authDomain:"klrm-f935b.firebaseapp.com",
+databaseURL:"https://klrm-f935b-default-rtdb.europe-west1.firebasedatabase.app",
+projectId:"klrm-f935b",
+storageBucket:"klrm-f935b.firebasestorage.app",
+messagingSenderId:"658119145296",
+appId:"1:658119145296:web:0067ecfb25447810d55e55",
+measurementId:"G-8DHMCCXZMR"
 };
 
 const fbApp=initializeApp(firebaseConfig);
 const db=getDatabase(fbApp);
 
 let connectedSession=null;
-let sessionRef=null;
-let feedRef=null;
-let sessionListener=null;
-let feedListener=null;
-let historyListener=null;
+let unsubSession=null;
+let unsubFeed=null;
+let unsubHistory=null;
 
 let sessionData=null;
 let feedData=null;
 let lessonHistory=[];
-let lastFrameTime=0;
 let fpsCounter=0;
 let currentFps=0;
 let fpsInterval=null;
@@ -217,127 +238,145 @@ let updateInterval=null;
 let warning20Shown=false;
 let warning40Shown=false;
 let streamEndedShown=false;
-let lastStreamStatus=null;
+let prevStatus=null;
+let lastFeedTimestamp=0;
 
 // ═══ LOGIN ═══
 const sessionInput=document.getElementById('session-input');
 const connectBtn=document.getElementById('connect-btn');
+const loginStatus=document.getElementById('login-status');
 
 sessionInput.addEventListener('input',()=>{
 const v=sessionInput.value.replace(/\D/g,'');
 sessionInput.value=v;
 connectBtn.disabled=v.length!==6;
 sessionInput.classList.remove('error');
+loginStatus.textContent='';
 });
 
-sessionInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!connectBtn.disabled)connectBtn.click()});
+sessionInput.addEventListener('keydown',e=>{
+if(e.key==='Enter'&&!connectBtn.disabled)connectBtn.click();
+});
 
 connectBtn.addEventListener('click',()=>{
 const sid=sessionInput.value.trim();
 if(sid.length!==6)return;
 connectBtn.disabled=true;
 connectBtn.textContent='Connecting...';
+loginStatus.textContent='🔍 Looking up session...';
 tryConnect(sid);
 });
 
-async function tryConnect(sid){
+function tryConnect(sid){
 const testRef=ref(db,'sessions/'+sid);
-onValue(testRef,(snapshot)=>{
-off(testRef);
+// Use get() for instant one-time read
+get(testRef).then(snapshot=>{
 const data=snapshot.val();
 if(!data){
 sessionInput.classList.add('error');
 connectBtn.disabled=false;
 connectBtn.textContent='Connect to Session';
+loginStatus.textContent='❌ Session not found. Check the PIN.';
 return;
 }
+loginStatus.textContent='✅ Session found! Connecting...';
 connectedSession=sid;
-startDashboard(sid);
-},{onlyOnce:true});
+setTimeout(()=>startDashboard(sid),200);
+}).catch(err=>{
+console.error(err);
+connectBtn.disabled=false;
+connectBtn.textContent='Connect to Session';
+loginStatus.textContent='❌ Connection error. Try again.';
+});
 }
 
 function startDashboard(sid){
 document.getElementById('login-screen').style.opacity='0';
-setTimeout(()=>{document.getElementById('login-screen').style.display='none'},500);
+setTimeout(()=>{document.getElementById('login-screen').style.display='none'},300);
 document.getElementById('dashboard').style.display='block';
 document.getElementById('dash-session-id').textContent=sid;
 document.getElementById('d-session-id').textContent=sid;
 
-sessionRef=ref(db,'sessions/'+sid);
-feedRef=ref(db,'sessions/'+sid+'/liveFeed');
+const sessRef=ref(db,'sessions/'+sid);
+const feedRef2=ref(db,'sessions/'+sid+'/liveFeed');
 const histRef=ref(db,'sessions/'+sid+'/lessonHistory');
 
-// Session data listener
-sessionListener=onValue(sessionRef,(snap)=>{
-const d=snap.val();if(!d)return;
+// Real-time session listener
+unsubSession=onValue(sessRef,snap=>{
+const d=snap.val();
+if(!d)return;
 sessionData=d;
 updateSessionInfo(d);
 });
 
-// Feed listener
-feedListener=onValue(feedRef,(snap)=>{
-const d=snap.val();if(!d)return;
+// Real-time feed listener — this fires on every frame update
+unsubFeed=onValue(feedRef2,snap=>{
+const d=snap.val();
+if(!d)return;
 feedData=d;
 updateFeed(d);
 });
 
 // History listener
-historyListener=onValue(histRef,(snap)=>{
+unsubHistory=onValue(histRef,snap=>{
 const d=snap.val();
 if(d){
-lessonHistory=Object.values(d).sort((a,b)=>b.timestamp-a.timestamp);
+lessonHistory=Object.values(d).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
 updateHistory();
 }
 });
 
-// FPS counter
+// FPS counter — count how many feed updates per second
 fpsInterval=setInterval(()=>{
-currentFps=fpsCounter;fpsCounter=0;
+currentFps=fpsCounter;
+fpsCounter=0;
 document.getElementById('feed-fps').textContent=currentFps+' fps';
 document.getElementById('d-fps').textContent=currentFps+' fps';
 },1000);
 
-// Duration & warning ticker
+// Timer & warning check every second
 updateInterval=setInterval(()=>{
 updateTimers();
 checkWarnings();
-checkStreamStatus();
+checkStreamEnd();
 },1000);
 }
 
 function updateSessionInfo(d){
-// Status
 const status=d.status||'pending';
 const statusEl=document.getElementById('dash-status');
 const dStatus=document.getElementById('d-status');
-statusEl.textContent=status.toUpperCase();
-statusEl.className='status-chip '+(status==='streaming'?'live':status==='active'?'live':'pending');
-dStatus.textContent=status.charAt(0).toUpperCase()+status.slice(1);
-dStatus.className='value '+(status==='streaming'?'danger':status==='active'?'good':'warn');
 
-lastStreamStatus=status;
+if(status==='streaming'){
+statusEl.textContent='● LIVE';statusEl.className='status-chip live';
+dStatus.textContent='Streaming';dStatus.className='value danger';
+}else if(status==='active'){
+statusEl.textContent='ACTIVE';statusEl.className='status-chip live';
+dStatus.textContent='Active';dStatus.className='value good';
+}else if(status==='pending'){
+statusEl.textContent='PENDING';statusEl.className='status-chip pending';
+dStatus.textContent='Pending';dStatus.className='value warn';
+}
 
-// Created
+prevStatus=status;
+
 if(d.createdAt){
 document.getElementById('d-created').textContent=new Date(d.createdAt).toLocaleString();
 }
 
-// Device
 if(d.device){
 let dev=d.device;
-if(dev.includes('iPhone'))dev='iPhone';
-else if(dev.includes('Android'))dev='Android';
-else if(dev.includes('iPad'))dev='iPad';
-else dev=dev.substring(0,30)+'...';
+if(dev.length>40)dev=dev.substring(0,38)+'…';
+if(dev.includes('iPhone'))dev='📱 iPhone';
+else if(dev.includes('Android'))dev='📱 Android';
+else if(dev.includes('iPad'))dev='📱 iPad';
 document.getElementById('d-device').textContent=dev;
 }
 
-// Screen
 if(d.screenWidth&&d.screenHeight){
 document.getElementById('d-screen').textContent=d.screenWidth+'×'+d.screenHeight;
 }
 
-// Current lesson
 if(d.currentLesson){
 document.getElementById('d-lesson').textContent=d.currentLesson.name||'--';
 document.getElementById('d-lesson').className='value highlight';
@@ -353,12 +392,10 @@ document.getElementById('d-lesson-started').textContent='--';
 document.getElementById('d-lesson-time').textContent='--';
 }
 
-// Current view
-if(d.currentView!==undefined){
-document.getElementById('d-current-view').textContent='View '+(d.currentView+1);
+if(d.currentView!==undefined&&d.currentView!==null){
+document.getElementById('d-current-view').textContent='View '+(Number(d.currentView)+1);
 }
 
-// Last updated
 if(d.lastUpdated){
 document.getElementById('d-last-update').textContent=new Date(d.lastUpdated).toLocaleTimeString();
 }
@@ -367,131 +404,114 @@ document.getElementById('d-last-update').textContent=new Date(d.lastUpdated).toL
 function updateFeed(d){
 if(!d||!d.frame)return;
 
+// Reset ended state
 streamEndedShown=false;
-const endedOverlay=document.getElementById('feed-ended');
-endedOverlay.style.display='none';
+document.getElementById('feed-ended').style.display='none';
+document.getElementById('feed-label').textContent='Live Feed';
+const liveDot=document.getElementById('live-dot');
+liveDot.style.background='#ff4444';
+liveDot.style.animation='pulse-live 1s infinite';
 
 const img=document.getElementById('feed-img');
 const noFeed=document.getElementById('no-feed');
+
+// Direct set — fastest possible
 img.src=d.frame;
 img.style.display='block';
 noFeed.style.display='none';
 
 fpsCounter++;
+lastFeedTimestamp=d.timestamp||Date.now();
 
-if(d.resolution)document.getElementById('feed-res').textContent=d.resolution;
-if(d.frameNumber){
-document.getElementById('feed-frame').textContent='F: '+d.frameNumber;
-document.getElementById('d-frame-count').textContent=d.frameNumber.toLocaleString();
+if(d.resolution){
+document.getElementById('feed-res').textContent=d.resolution;
+document.getElementById('d-resolution').textContent=d.resolution;
 }
-if(d.resolution)document.getElementById('d-resolution').textContent=d.resolution;
-
-const liveDot=document.getElementById('live-dot');
-liveDot.style.background='#ff4444';
+if(d.frameNumber){
+document.getElementById('feed-frame').textContent='F:'+d.frameNumber;
+document.getElementById('d-frame-count').textContent=Number(d.frameNumber).toLocaleString();
+}
 }
 
 function updateTimers(){
 if(!sessionData)return;
-
-// Session duration
 if(sessionData.createdTimestamp){
-const elapsed=Date.now()-sessionData.createdTimestamp;
-document.getElementById('d-duration').textContent=formatDuration(elapsed);
+const el=Date.now()-sessionData.createdTimestamp;
+document.getElementById('d-duration').textContent=formatDuration(el);
 }
-
-// Lesson time
 if(sessionData.currentLesson&&sessionData.currentLesson.startedAt){
-const lessonElapsed=Date.now()-sessionData.currentLesson.startedAt;
-document.getElementById('d-lesson-time').textContent=formatDuration(lessonElapsed);
+const el2=Date.now()-sessionData.currentLesson.startedAt;
+document.getElementById('d-lesson-time').textContent=formatDuration(el2);
 }
 }
 
 function checkWarnings(){
 if(!sessionData||!sessionData.createdTimestamp)return;
-const elapsed=Date.now()-sessionData.createdTimestamp;
-const mins=elapsed/60000;
-
-const container=document.getElementById('warnings');
+const mins=(Date.now()-sessionData.createdTimestamp)/60000;
 
 if(mins>=20&&!warning20Shown){
 warning20Shown=true;
-container.innerHTML='';
-addWarning('caution','⚠️','20 Minutes of VR Usage','The student has been using VR for 20 minutes. Consider recommending a short break to reduce eye strain and fatigue.');
+addWarning('caution','⚠️','20 Minutes of VR Usage',
+'Student has been using VR for 20 minutes. Recommend a short break to reduce eye strain.');
 }
-
 if(mins>=40&&!warning40Shown){
 warning40Shown=true;
-addWarning('danger','🚨','40 Minutes — Eye Strain Risk','Extended VR usage detected! Strongly recommend the student takes a 10-15 minute break immediately. Prolonged use can cause headaches, eye strain, and discomfort.');
+addWarning('danger','🚨','40 Minutes — Eye Strain Risk!',
+'Extended VR usage! Strongly recommend a 10-15 minute break immediately to prevent headaches and eye fatigue.');
 }
 }
 
-function addWarning(type,icon,title,text){
-const container=document.getElementById('warnings');
-// Remove placeholder
-const placeholder=container.querySelector('div[style]');
-if(placeholder&&placeholder.textContent.includes('No warnings'))container.innerHTML='';
-
-const div=document.createElement('div');
-div.className='warning-bar '+type;
-div.innerHTML=`<div class="ico">${icon}</div><div class="text"><strong>${title}</strong>${text}</div>`;
-container.prepend(div);
-
-// Browser notification
-if(Notification.permission==='granted'){
-new Notification('Omni VR — '+title,{body:text,icon:'📊'});
-}else if(Notification.permission!=='denied'){
-Notification.requestPermission().then(p=>{if(p==='granted')new Notification('Omni VR — '+title,{body:text});});
-}
-}
-
-function checkStreamStatus(){
+function checkStreamEnd(){
 if(!sessionData)return;
 const status=sessionData.status;
+// Stream ended if status went from streaming to pending/active
+if((status==='pending')&&lastFeedTimestamp>0){
+const since=Date.now()-lastFeedTimestamp;
+if(since>6000&&!streamEndedShown){
+showStreamEnded();
+}
+}
+}
 
-if(lastStreamStatus==='streaming'&&(status==='pending'||status==='active'||!status)){
-if(!streamEndedShown){
+function showStreamEnded(){
 streamEndedShown=true;
-const endedOverlay=document.getElementById('feed-ended');
-endedOverlay.style.display='flex';
+document.getElementById('feed-ended').style.display='flex';
 document.getElementById('feed-label').textContent='Stream Ended';
 const liveDot=document.getElementById('live-dot');
 liveDot.style.background='#666';
 liveDot.style.animation='none';
 
 const statusEl=document.getElementById('dash-status');
-statusEl.textContent='ENDED';
-statusEl.className='status-chip ended';
+statusEl.textContent='ENDED';statusEl.className='status-chip ended';
 
-addWarning('caution','📺','VR Stream Ended','The student has finished their VR session. Total session data has been recorded.');
-}
+addWarning('caution','📺','VR Stream Ended',
+'The student has finished their VR session. Session data preserved.');
 }
 
-// Also detect if no new frames for 5+ seconds while status is streaming
-if(feedData&&feedData.timestamp){
-const sinceLast=Date.now()-feedData.timestamp;
-if(sinceLast>5000&&status==='pending'){
-if(!streamEndedShown){
-streamEndedShown=true;
-const endedOverlay=document.getElementById('feed-ended');
-endedOverlay.style.display='flex';
-document.getElementById('feed-label').textContent='Stream Ended';
-const liveDot=document.getElementById('live-dot');
-liveDot.style.background='#666';
-liveDot.style.animation='none';
-}
-}
+function addWarning(type,icon,title,text){
+const container=document.getElementById('warnings');
+const ph=container.querySelector('[style*="opacity"]');
+if(ph&&ph.textContent.includes('No warnings'))container.innerHTML='';
+
+const div=document.createElement('div');
+div.className='warning-bar '+type;
+div.innerHTML=`<div class="ico">${icon}</div><div class="text"><strong>${title}</strong>${text}</div>`;
+container.prepend(div);
+
+if('Notification' in window&&Notification.permission==='granted'){
+new Notification('Omni VR — '+title,{body:text});
 }
 }
 
 function updateHistory(){
 const container=document.getElementById('history-list');
-if(lessonHistory.length===0)return;
+if(!lessonHistory.length)return;
 container.innerHTML='';
 lessonHistory.forEach(h=>{
 const div=document.createElement('div');
 div.className='history-item';
-const t=new Date(h.timestamp);
-div.innerHTML=`<div class="name">📚 ${h.name||h.code}</div><div class="time">${t.toLocaleTimeString()}</div>`;
+const t=h.timestamp?new Date(h.timestamp).toLocaleTimeString():'--';
+div.innerHTML=`<div class="name">📚 ${h.name||h.code||'Unknown'}</div><div class="time">${t}</div>`;
 container.appendChild(div);
 });
 }
@@ -501,29 +521,86 @@ const s=Math.floor(ms/1000);
 const h=Math.floor(s/3600);
 const m=Math.floor((s%3600)/60);
 const sec=s%60;
-if(h>0)return `${h}h ${m}m ${sec}s`;
-if(m>0)return `${m}m ${sec}s`;
-return `${sec}s`;
+if(h>0)return h+'h '+m+'m '+sec+'s';
+if(m>0)return m+'m '+sec+'s';
+return sec+'s';
 }
 
-// Disconnect
-document.getElementById('disconnect-btn').addEventListener('click',()=>{
-if(sessionListener)off(ref(db,'sessions/'+connectedSession));
-if(feedListener)off(ref(db,'sessions/'+connectedSession+'/liveFeed'));
-if(historyListener)off(ref(db,'sessions/'+connectedSession+'/lessonHistory'));
-if(fpsInterval)clearInterval(fpsInterval);
-if(updateInterval)clearInterval(updateInterval);
+// ═══ NOTIFICATION SENDER ═══
+const notifInput=document.getElementById('notif-input');
+const notifBtn=document.getElementById('notif-send-btn');
+const notifSent=document.getElementById('notif-sent');
 
-connectedSession=null;sessionData=null;feedData=null;lessonHistory=[];
-warning20Shown=false;warning40Shown=false;streamEndedShown=false;
-
-document.getElementById('dashboard').style.display='none';
-document.getElementById('login-screen').style.display='flex';
-document.getElementById('login-screen').style.opacity='1';
-sessionInput.value='';connectBtn.disabled=true;connectBtn.textContent='Connect to Session';
+notifInput.addEventListener('input',()=>{
+notifBtn.disabled=notifInput.value.trim().length===0;
+});
+notifInput.addEventListener('keydown',e=>{
+if(e.key==='Enter'&&!notifBtn.disabled)notifBtn.click();
 });
 
-// Request notification permission
+notifBtn.addEventListener('click',()=>{
+const msg=notifInput.value.trim();
+if(!msg||!connectedSession)return;
+
+notifBtn.disabled=true;
+notifBtn.textContent='Sending...';
+
+const notifRef=ref(db,'sessions/'+connectedSession+'/notification');
+set(notifRef,{
+message:msg,
+sentAt:Date.now(),
+from:'teacher'
+}).then(()=>{
+notifInput.value='';
+notifBtn.textContent='Send';
+notifBtn.disabled=true;
+notifSent.style.display='block';
+notifSent.textContent='✅ Notification sent: "'+msg+'"';
+
+// Auto-delete after 5 seconds
+setTimeout(()=>{
+remove(notifRef).catch(()=>{});
+notifSent.style.display='none';
+},5000);
+}).catch(err=>{
+console.error(err);
+notifBtn.textContent='Send';
+notifBtn.disabled=false;
+notifSent.style.display='block';
+notifSent.textContent='❌ Failed to send';
+notifSent.style.color='#ff4444';
+setTimeout(()=>{notifSent.style.display='none';notifSent.style.color='#00cc66'},3000);
+});
+});
+
+// ═══ DISCONNECT ═══
+document.getElementById('disconnect-btn').addEventListener('click',()=>{
+cleanup();
+document.getElementById('dashboard').style.display='none';
+const ls=document.getElementById('login-screen');
+ls.style.display='flex';
+ls.style.opacity='1';
+sessionInput.value='';
+connectBtn.disabled=true;
+connectBtn.textContent='Connect to Session';
+loginStatus.textContent='';
+});
+
+function cleanup(){
+if(connectedSession){
+const sessR=ref(db,'sessions/'+connectedSession);
+const feedR=ref(db,'sessions/'+connectedSession+'/liveFeed');
+const histR=ref(db,'sessions/'+connectedSession+'/lessonHistory');
+off(sessR);off(feedR);off(histR);
+}
+if(fpsInterval){clearInterval(fpsInterval);fpsInterval=null}
+if(updateInterval){clearInterval(updateInterval);updateInterval=null}
+connectedSession=null;sessionData=null;feedData=null;lessonHistory=[];
+warning20Shown=false;warning40Shown=false;streamEndedShown=false;
+prevStatus=null;lastFeedTimestamp=0;fpsCounter=0;currentFps=0;
+}
+
+// Request notification permission on load
 if('Notification' in window&&Notification.permission==='default'){
 Notification.requestPermission();
 }
